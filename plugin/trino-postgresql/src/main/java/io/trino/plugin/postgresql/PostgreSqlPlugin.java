@@ -20,6 +20,7 @@ public class PostgreSqlPlugin
 {
     public PostgreSqlPlugin()
     {
+        // TODO drop this commit - test GIB changes
         super("postgresql", new PostgreSqlClientModule());
     }
 }
