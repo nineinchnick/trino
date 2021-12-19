@@ -40,6 +40,7 @@ public final class BenchmarkQueryRunner
 
     public static LocalQueryRunner createLocalQueryRunner(Map<String, String> extraSessionProperties)
     {
+        // TODO drop this comment - only to test changes in the benchmark module
         SessionBuilder sessionBuilder = testSessionBuilder()
                 .setCatalog("tpch")
                 .setSchema(TINY_SCHEMA_NAME);
