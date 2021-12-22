@@ -13,17 +13,26 @@
  */
 package io.trino.tests.product.launcher.suite;
 
+import com.google.common.collect.ImmutableSet;
 import io.trino.tests.product.launcher.env.EnvironmentConfig;
 import io.trino.tests.product.launcher.env.configs.ConfigDefault;
 
 import java.util.List;
+import java.util.Set;
 
 import static com.google.common.base.MoreObjects.toStringHelper;
 import static io.trino.tests.product.launcher.Configurations.nameForSuiteClass;
 
 public abstract class Suite
 {
+    public static final ImmutableSet<String> COMMON_IGNORED_MODULES = ImmutableSet.of();
+
     public abstract List<SuiteTestRun> getTestRuns(EnvironmentConfig config);
+
+    public Set<String> getIgnoredModules(EnvironmentConfig ignoredConfig)
+    {
+        return COMMON_IGNORED_MODULES;
+    }
 
     @Override
     public String toString()
