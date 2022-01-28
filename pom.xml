@@ -154,6 +154,7 @@
         <module>service/trino-verifier</module>
         <module>testing/trino-benchmark</module>
         <module>testing/trino-benchto-benchmarks</module>
+        <module>testing/trino-plugin-reader</module>
         <module>testing/trino-product-tests</module>
         <module>testing/trino-product-tests-launcher</module>
         <module>testing/trino-server-dev</module>
@@ -1397,6 +1398,12 @@
                 <groupId>org.apache.kafka</groupId>
                 <artifactId>kafka-clients</artifactId>
                 <version>2.4.1</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.apache.maven</groupId>
+                <artifactId>maven-model</artifactId>
+                <version>3.3.9</version>
             </dependency>
 
             <dependency>
