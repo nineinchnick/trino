@@ -613,6 +613,15 @@ jobs:
         run: |
           export MAVEN_OPTS="${MAVEN_INSTALL_OPTS}"
           $RETRY $MAVEN install ${MAVEN_FAST_INSTALL} -pl '!:trino-docs,!:trino-server-rpm'
+      - name: Map impacted plugins to connectors
+        run: |
+          #export MAVEN_OPTS="${MAVEN_INSTALL_OPTS}"
+          #$MAVEN validate ${MAVEN_FAST_INSTALL} -pl '!:trino-docs,!:trino-server-rpm'
+          #plugins_cmd=testing/trino-testing/target/trino-testing-*-executable.jar
+          #plugins_dir=core/trino-server/target/trino-server-*-hardlinks/plugin
+          #connectors=$("$plugins_cmd" -i gib-impacted.log -p "$plugins_dir" | tr '\n' ',' | sed 's/,$//')
+          connectors=postgresql
+          echo "IMPACTED_CONNECTORS=$connectors" >> $GITHUB_ENV
       - name: Free Disk Space
         run: |
           docker image prune -af
@@ -621,7 +630,10 @@ jobs:
       - name: Product Tests
         run: |
           testing/bin/ptl suite run \
-            --suite ${{ matrix.suite }} --config config-${{ matrix.config }} --bind=off --logs-dir logs/ --timeout 2h \
+            --suite ${{ matrix.suite }} \
+            --config config-${{ matrix.config }} \
+            --impacted-features ${{ env.IMPACTED_CONNECTORS }} \
+            --bind=off --logs-dir logs/ --timeout 2h \
             --trino-jdk-version zulu_${{ matrix.jdk }}
       - name: Upload test logs and results
         uses: actions/upload-artifact@v2
