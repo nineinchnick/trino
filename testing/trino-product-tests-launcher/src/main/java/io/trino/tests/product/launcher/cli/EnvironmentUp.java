@@ -32,16 +32,24 @@ import picocli.CommandLine.ExitCode;
 
 import javax.inject.Inject;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.Callable;
+import java.util.stream.Collectors;
 
 import static io.trino.tests.product.launcher.cli.Commands.runCommand;
+import static io.trino.tests.product.launcher.env.EnvironmentContainers.TEMPTO_CONFIG_FILES_ENV;
 import static io.trino.tests.product.launcher.env.EnvironmentContainers.TESTS;
 import static io.trino.tests.product.launcher.env.EnvironmentContainers.isPrestoContainer;
 import static io.trino.tests.product.launcher.env.EnvironmentListener.getStandardListeners;
+import static io.trino.tests.product.launcher.env.common.Standard.CONTAINER_TEMPTO_PROFILE_CONFIG;
 import static java.util.Objects.requireNonNull;
 import static picocli.CommandLine.Mixin;
 import static picocli.CommandLine.Option;
@@ -99,6 +107,9 @@ public final class EnvironmentUp
         @Option(names = "--logs-dir", paramLabel = "<dir>", description = "Location of the exported logs directory " + DEFAULT_VALUE)
         public Optional<Path> logsDirBase;
 
+        @Option(names = "--tempto-resources", paramLabel = "<path>", description = "Path where Tempto configuration file and other resources will be written to " + DEFAULT_VALUE)
+        public Optional<Path> temptoResources;
+
         public Module toModule()
         {
             return binder -> binder.bind(EnvironmentUpOptions.class).toInstance(this);
@@ -116,6 +127,7 @@ public final class EnvironmentUp
         private final Optional<Path> logsDirBase;
         private final DockerContainer.OutputMode outputMode;
         private final Map<String, String> extraOptions;
+        private final Optional<Path> temptoResources;
 
         @Inject
         public Execution(EnvironmentFactory environmentFactory, EnvironmentConfig environmentConfig, EnvironmentOptions options, EnvironmentUpOptions environmentUpOptions)
@@ -128,6 +140,7 @@ public final class EnvironmentUp
             this.outputMode = requireNonNull(options.output, "options.output is null");
             this.logsDirBase = requireNonNull(environmentUpOptions.logsDirBase, "environmentUpOptions.logsDirBase is null");
             this.extraOptions = ImmutableMap.copyOf(requireNonNull(environmentUpOptions.extraOptions, "environmentUpOptions.extraOptions is null"));
+            this.temptoResources = environmentUpOptions.temptoResources;
         }
 
         @Override
@@ -136,8 +149,41 @@ public final class EnvironmentUp
             Optional<Path> environmentLogPath = logsDirBase.map(dir -> dir.resolve(environment));
             Environment.Builder builder = environmentFactory.get(environment, environmentConfig, extraOptions)
                     .setContainerOutputMode(outputMode)
-                    .setLogsBaseDir(environmentLogPath)
-                    .removeContainer(TESTS);
+                    .setLogsBaseDir(environmentLogPath);
+
+            temptoResources.ifPresent(path -> builder.configureContainer(TESTS, container -> {
+                String[] defaultNames = new String[]{
+                        "/docker/presto-product-tests/conf/tempto/tempto-configuration-for-docker-default.yaml",
+                        CONTAINER_TEMPTO_PROFILE_CONFIG,
+                        environmentConfig.getTemptoEnvironmentConfigFile()};
+                String[] envNames = container.getEnvMap().get(TEMPTO_CONFIG_FILES_ENV).split(",");
+                String[] names = Arrays.copyOf(defaultNames, defaultNames.length + envNames.length);
+                System.arraycopy(envNames, 0, names, defaultNames.length, envNames.length);
+
+
+                container.setCommand("sleep 100000");
+                container.reset();
+                container.start();
+
+                String combined = getCombinedTemptoConfiguration(Arrays.asList(names), container, path);
+                try {
+                    Files.writeString(path.resolve("tempto-configuration.yaml"), combined);
+                }
+                catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
+                combined.lines()
+                        .filter(line -> line.contains("${tests.paths_prefix}"))
+                        .map(line -> line.substring(line.indexOf("${tests.paths_prefix}") + "${tests.paths_prefix}".length()))
+                        .forEach(containerPath -> {
+                            Path relativePath = path.resolve(containerPath.replaceAll("^/+", ""));
+                            relativePath.toFile().getParentFile().mkdirs();
+                            container.copyFileFromContainer(containerPath, relativePath.toString());
+                        });
+                container.stop();
+            }));
+
+            builder.removeContainer(TESTS);
 
             if (withoutPrestoMaster) {
                 builder.removeContainers(container -> isPrestoContainer(container.getLogicalName()));
@@ -156,6 +202,30 @@ public final class EnvironmentUp
             environment.stop();
 
             return ExitCode.OK;
+        }
+
+        private String getCombinedTemptoConfiguration(List<String> names, DockerContainer container, Path path)
+        {
+            Path tempDir;
+            try {
+                tempDir = Files.createTempDirectory("tempto-configs");
+            }
+            catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+            return names.stream()
+                    .filter(containerPath -> !containerPath.equals("/dev/null"))
+                    .map(containerPath -> {
+                        Path localPath = tempDir.resolve("file.yaml");
+                        container.copyFileFromContainer(containerPath, localPath.toString());
+                        try {
+                            return "---\n" + Files.readString(localPath);
+                        }
+                        catch (IOException e) {
+                            throw new UncheckedIOException(e);
+                        }
+                    })
+                    .collect(Collectors.joining("\n"));
         }
 
         private static void killContainersReaperContainer()

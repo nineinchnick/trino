@@ -36,6 +36,7 @@ public final class EnvironmentContainers
     public static final String HADOOP = "hadoop-master";
     public static final String TESTS = "tests";
     public static final String LDAP = "ldapserver";
+    public static final String TEMPTO_CONFIG_FILES_ENV = "TEMPTO_CONFIG_FILES";
 
     private EnvironmentContainers() {}
 
@@ -60,7 +61,7 @@ public final class EnvironmentContainers
             String temptoConfig = "/docker/presto-product-tests/conf/tempto/tempto-configuration-for-" + suffix + ".yaml";
             dockerContainer
                     .withCopyFileToContainer(forHostPath(path), temptoConfig)
-                    .withEnv("TEMPTO_CONFIG_FILES", temptoConfigFiles ->
+                    .withEnv(TEMPTO_CONFIG_FILES_ENV, temptoConfigFiles ->
                             temptoConfigFiles
                                     .map(files -> files + "," + temptoConfig)
                                     .orElse(temptoConfig));
