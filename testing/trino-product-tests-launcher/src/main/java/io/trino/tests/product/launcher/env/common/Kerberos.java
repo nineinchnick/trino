@@ -13,6 +13,7 @@
  */
 package io.trino.tests.product.launcher.env.common;
 
+import com.github.dockerjava.api.model.ExposedPort;
 import io.trino.tests.product.launcher.env.DockerContainer;
 import io.trino.tests.product.launcher.env.Environment;
 import io.trino.tests.product.launcher.env.EnvironmentConfig;
@@ -22,6 +23,10 @@ import org.testcontainers.containers.wait.strategy.WaitAllStrategy;
 import org.testcontainers.containers.wait.strategy.WaitStrategy;
 
 import javax.inject.Inject;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 import static io.trino.tests.product.launcher.docker.ContainerUtil.forSelectedPorts;
 import static java.util.Objects.requireNonNull;
@@ -55,6 +60,16 @@ public class Kerberos
     {
         DockerContainer container = new DockerContainer("ghcr.io/trinodb/testing/kerberos:" + imagesVersion, KERBEROS)
                 .withStartupCheckStrategy(new IsRunningStartupCheckStrategy())
+                .withCreateContainerCmdModifier(cmd -> {
+                    // Add previously exposed ports and UDP port
+                    List<ExposedPort> exposedPorts = new ArrayList<>();
+                    if (cmd.getExposedPorts() != null) {
+                        exposedPorts.addAll(Arrays.asList(cmd.getExposedPorts()));
+                    }
+                    exposedPorts.add(ExposedPort.udp(KERBEROS_PORT));
+                    exposedPorts.add(ExposedPort.udp(KERBEROS_ADMIN_PORT));
+                    cmd.withExposedPorts(exposedPorts);
+                })
                 .waitingFor(DEFAULT_WAIT_STRATEGY);
 
         portBinder.exposePort(container, KERBEROS_PORT);

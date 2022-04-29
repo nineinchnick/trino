@@ -13,6 +13,10 @@
  */
 package io.trino.tests.product.launcher.env.common;
 
+import com.github.dockerjava.api.model.ExposedPort;
+import com.github.dockerjava.api.model.HostConfig;
+import com.github.dockerjava.api.model.PortBinding;
+import com.github.dockerjava.api.model.Ports;
 import com.google.common.collect.ImmutableList;
 import io.trino.tests.product.launcher.docker.DockerFiles;
 import io.trino.tests.product.launcher.env.Environment;
@@ -21,6 +25,8 @@ import io.trino.tests.product.launcher.testcontainers.PortBinder;
 
 import javax.inject.Inject;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import static io.trino.tests.product.launcher.env.EnvironmentContainers.COORDINATOR;
@@ -63,6 +69,27 @@ public class HadoopKerberos
         builder.configureContainer(HADOOP, container -> {
             container.setDockerImageName(dockerImageName);
             portBinder.exposePort(container, 88);
+
+            container.withCreateContainerCmdModifier(cmd -> {
+                // Add previously exposed ports and UDP port
+                List<ExposedPort> exposedPorts = new ArrayList<>(List.of(ExposedPort.udp(88)));
+                if (cmd.getExposedPorts() != null) {
+                    exposedPorts.addAll(Arrays.asList(cmd.getExposedPorts()));
+                }
+                cmd.withExposedPorts(exposedPorts);
+
+                HostConfig hostConfig = new HostConfig();
+                if (cmd.getHostConfig() != null) {
+                    hostConfig = cmd.getHostConfig();
+                }
+                Ports ports = new Ports();
+                if (hostConfig.getPortBindings() != null) {
+                    ports = hostConfig.getPortBindings();
+                }
+                ports.add(PortBinding.parse("88:88/udp"));
+                hostConfig.withPortBindings(ports);
+                cmd.withHostConfig(hostConfig);
+            });
         });
         builder.configureContainer(COORDINATOR, container -> {
             container.setDockerImageName(dockerImageName);
