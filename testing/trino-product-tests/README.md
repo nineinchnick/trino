@@ -142,6 +142,15 @@ testing/bin/ptl test run \
             -- -t sql_tests.testcases.system.selectInformationSchemaTables
 ```
 
+### Running a test from the IDE
+
+To run selected tests from the IDE, it is required:
+* choose a local dir where to save test configuration and resources: `LOCAL_DIR=$(mktemp -d)`
+* to bring up the selected environment with the `--tempto-resources=$LOCAL_DIR` option
+* create an additional Tempto config by executing: `echo "testing: {paths_prefix: $LOCAL_DIR}" > local.yaml`
+* add `-Dtempto.configurations=testing/trino-product-tests/src/main/resources/tempto-configuration.yaml,$LOCAL_DIR/tempto-configuration.yaml,local.yaml -Djava.security.krb5.conf=$LOCAL_DIR/etc/krb5.conf`
+  to the VM options in the IDE run configuration
+
 ### Running groups of tests
 
 Tests belong to a single or possibly multiple groups. Java based tests are

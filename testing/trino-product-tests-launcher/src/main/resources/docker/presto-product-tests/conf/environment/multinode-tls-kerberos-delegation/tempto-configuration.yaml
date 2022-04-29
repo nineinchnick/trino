@@ -4,6 +4,7 @@ databases:
       SSL=true&\
       SSLTrustStorePath=${databases.presto.https_keystore_path}&\
       SSLTrustStorePassword=${databases.presto.https_keystore_password}&\
+      KerberosConfigPath=${databases.presto.cli_kerberos_config_path}&\
       KerberosRemoteServiceName=${databases.presto.cli_kerberos_service_name}&\
       KerberosUseCanonicalHostname=${databases.presto.cli_kerberos_use_canonical_hostname}&\
       KerberosDelegation=true"

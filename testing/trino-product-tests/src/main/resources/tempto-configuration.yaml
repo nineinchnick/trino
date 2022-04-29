@@ -179,6 +179,7 @@ tests:
     path: /tmp/product-test
   assert:
     float_tolerance: 0.000001
+  paths_prefix: ''
 
 ldap:
    admin:
