@@ -36,7 +36,6 @@ import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.connector.SystemTable;
 import io.trino.spi.connector.TableScanRedirectApplicationResult;
 import io.trino.spi.expression.ConnectorExpression;
-import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.session.PropertyMetadata;
 import io.trino.spi.statistics.TableStatistics;
 import io.trino.spi.type.Type;
@@ -342,9 +341,9 @@ public class CachingJdbcClient
     }
 
     @Override
-    public TableStatistics getTableStatistics(ConnectorSession session, JdbcTableHandle handle, TupleDomain<ColumnHandle> tupleDomain)
+    public TableStatistics getTableStatistics(ConnectorSession session, JdbcTableHandle handle)
     {
-        TableStatisticsCacheKey key = new TableStatisticsCacheKey(handle, tupleDomain);
+        TableStatisticsCacheKey key = new TableStatisticsCacheKey(handle);
 
         TableStatistics cachedStatistics = statisticsCache.getIfPresent(key);
         if (cachedStatistics != null) {
@@ -353,7 +352,7 @@ public class CachingJdbcClient
             }
             statisticsCache.invalidate(key);
         }
-        return get(statisticsCache, key, () -> delegate.getTableStatistics(session, handle, tupleDomain));
+        return get(statisticsCache, key, () -> delegate.getTableStatistics(session, handle));
     }
 
     @Override
@@ -713,12 +712,10 @@ public class CachingJdbcClient
     {
         // TODO depend on Identity when needed
         private final JdbcTableHandle tableHandle;
-        private final TupleDomain<ColumnHandle> tupleDomain;
 
-        private TableStatisticsCacheKey(JdbcTableHandle tableHandle, TupleDomain<ColumnHandle> tupleDomain)
+        private TableStatisticsCacheKey(JdbcTableHandle tableHandle)
         {
             this.tableHandle = requireNonNull(tableHandle, "tableHandle is null");
-            this.tupleDomain = requireNonNull(tupleDomain, "tupleDomain is null");
         }
 
         @Override
@@ -731,14 +728,13 @@ public class CachingJdbcClient
                 return false;
             }
             TableStatisticsCacheKey that = (TableStatisticsCacheKey) o;
-            return tableHandle.equals(that.tableHandle)
-                    && tupleDomain.equals(that.tupleDomain);
+            return tableHandle.equals(that.tableHandle);
         }
 
         @Override
         public int hashCode()
         {
-            return Objects.hash(tableHandle, tupleDomain);
+            return Objects.hash(tableHandle);
         }
 
         @Override
@@ -746,7 +742,6 @@ public class CachingJdbcClient
         {
             return toStringHelper(this)
                     .add("tableHandle", tableHandle)
-                    .add("tupleDomain", tupleDomain)
                     .toString();
         }
     }
