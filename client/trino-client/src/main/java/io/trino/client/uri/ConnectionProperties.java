@@ -11,7 +11,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.trino.jdbc;
+package io.trino.client.uri;
 
 import com.google.common.base.CharMatcher;
 import com.google.common.base.Splitter;
@@ -37,7 +37,7 @@ import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static com.google.common.collect.Maps.immutableEntry;
 import static io.trino.client.ClientSelectedRole.Type.ALL;
 import static io.trino.client.ClientSelectedRole.Type.NONE;
-import static io.trino.jdbc.AbstractConnectionProperty.checkedPredicate;
+import static io.trino.client.uri.AbstractConnectionProperty.checkedPredicate;
 import static java.util.Collections.unmodifiableMap;
 import static java.util.Objects.requireNonNull;
 import static java.util.function.Function.identity;

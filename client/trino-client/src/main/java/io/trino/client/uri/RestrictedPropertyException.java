@@ -11,26 +11,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.trino.jdbc;
+package io.trino.client.uri;
 
-import io.trino.client.auth.external.KnownToken;
+import java.sql.SQLException;
 
-public enum KnownTokenCache
+public class RestrictedPropertyException
+        extends SQLException
 {
-    NONE {
-        @Override
-        KnownToken create()
-        {
-            return KnownToken.local();
-        }
-    },
-    MEMORY {
-        @Override
-        KnownToken create()
-        {
-            return KnownToken.memoryCached();
-        }
-    };
+    private final PropertyName name;
 
-    abstract KnownToken create();
+    public RestrictedPropertyException(PropertyName name, String message)
+    {
+        super(message);
+        this.name = name;
+    }
+
+    public PropertyName getPropertyName()
+    {
+        return this.name;
+    }
 }
