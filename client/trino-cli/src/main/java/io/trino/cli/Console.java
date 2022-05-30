@@ -230,9 +230,9 @@ public class Console
             while (!exiting.get()) {
                 // setup prompt
                 String prompt = PROMPT_NAME;
-                String schema = queryRunner.getSession().getSchema();
-                if (schema != null) {
-                    prompt += ":" + schema.replace("%", "%%");
+                Optional<String> schema = queryRunner.getSession().getSchema();
+                if (schema.isPresent()) {
+                    prompt += ":" + schema.get().replace("%", "%%");
                 }
                 String commandPrompt = prompt + "> ";
 
@@ -346,8 +346,8 @@ public class Console
         try {
             finalSql = preprocessQuery(
                     terminal,
-                    Optional.ofNullable(queryRunner.getSession().getCatalog()),
-                    Optional.ofNullable(queryRunner.getSession().getSchema()),
+                    queryRunner.getSession().getCatalog(),
+                    queryRunner.getSession().getSchema(),
                     sql);
         }
         catch (QueryPreprocessorException e) {
@@ -365,10 +365,10 @@ public class Console
 
             // update catalog and schema if present
             if (query.getSetCatalog().isPresent() || query.getSetSchema().isPresent()) {
-                session = ClientSession.builder(session)
-                        .withCatalog(query.getSetCatalog().orElse(session.getCatalog()))
-                        .withSchema(query.getSetSchema().orElse(session.getSchema()))
-                        .build();
+                ClientSession.Builder builder = ClientSession.builder(session);
+                query.getSetCatalog().ifPresent(builder::withCatalog);
+                query.getSetSchema().ifPresent(builder::withSchema);
+                session = builder.build();
             }
 
             // update transaction ID if necessary

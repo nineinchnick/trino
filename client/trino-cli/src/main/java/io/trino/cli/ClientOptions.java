@@ -126,10 +126,10 @@ public class ClientOptions
     public String traceToken;
 
     @Option(names = "--catalog", paramLabel = "<catalog>", description = "Default catalog")
-    public String catalog;
+    public Optional<String> catalog;
 
     @Option(names = "--schema", paramLabel = "<schema>", description = "Default schema")
-    public String schema;
+    public Optional<String> schema;
 
     @Option(names = {"-f", "--file"}, paramLabel = "<file>", description = "Execute statements from file and exit")
     public String file;

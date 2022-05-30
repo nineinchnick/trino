@@ -40,8 +40,8 @@ public class ClientSession
     private final Optional<String> traceToken;
     private final Set<String> clientTags;
     private final String clientInfo;
-    private final String catalog;
-    private final String schema;
+    private final Optional<String> catalog;
+    private final Optional<String> schema;
     private final String path;
     private final ZoneId timeZone;
     private final Locale locale;
@@ -74,8 +74,8 @@ public class ClientSession
             Optional<String> traceToken,
             Set<String> clientTags,
             String clientInfo,
-            String catalog,
-            String schema,
+            Optional<String> catalog,
+            Optional<String> schema,
             String path,
             ZoneId timeZone,
             Locale locale,
@@ -173,12 +173,12 @@ public class ClientSession
         return clientInfo;
     }
 
-    public String getCatalog()
+    public Optional<String> getCatalog()
     {
         return catalog;
     }
 
-    public String getSchema()
+    public Optional<String> getSchema()
     {
         return schema;
     }
@@ -300,8 +300,12 @@ public class ClientSession
             traceToken = clientSession.getTraceToken();
             clientTags = clientSession.getClientTags();
             clientInfo = clientSession.getClientInfo();
-            catalog = clientSession.getCatalog();
-            schema = clientSession.getSchema();
+            if (clientSession.getCatalog().isPresent()) {
+                catalog = clientSession.getCatalog().get();
+            }
+            if (clientSession.getSchema().isPresent()) {
+                schema = clientSession.getSchema().get();
+            }
             path = clientSession.getPath();
             timeZone = clientSession.getTimeZone();
             locale = clientSession.getLocale();
@@ -385,8 +389,8 @@ public class ClientSession
                     traceToken,
                     clientTags,
                     clientInfo,
-                    catalog,
-                    schema,
+                    Optional.ofNullable(catalog),
+                    Optional.ofNullable(schema),
                     path,
                     timeZone,
                     locale,
