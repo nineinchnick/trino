@@ -1,5 +1,7 @@
 # Development
 
+bla
+
 Developers should read [the development section of the website](https://trino.io/development),
 which covers thing like development philosophy and contribution process.
 
