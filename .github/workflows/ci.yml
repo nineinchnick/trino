@@ -7,6 +7,8 @@ on:
   pull_request:
     paths-ignore:
       - 'docs/**'
+  repository_dispatch:
+    types: [ok-to-test-command]
 
 env:
   # An envar that signals to tests we are executing in the CI environment
@@ -173,9 +175,20 @@ jobs:
           # TODO: config-apache-hive3
     timeout-minutes: 60
     steps:
+      # regular checkout when triggered by pull_request or push
       - uses: actions/checkout@v2
+        if: github.event_name != 'repository_dispatch'
         with:
           fetch-depth: 0 # checkout all commits to be able to determine merge base for GIB
+      - name: Fork based /ok-to-test checkout
+        if: >-
+          github.event_name == 'repository_dispatch' &&
+          github.event.client_payload.slash_command.sha != '' &&
+          contains(github.event.client_payload.pull_request.head.sha, github.event.client_payload.slash_command.sha)
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0 # checkout all commits to be able to determine merge base for GIB
+          ref: 'refs/pull/${{ github.event.client_payload.pull_request.number }}/merge'
       - name: Fetch base ref to find merge-base for GIB
         run: .github/bin/git-fetch-base-ref.sh
       - uses: actions/setup-java@v2
@@ -284,6 +297,17 @@ jobs:
           path: |
             **/surefire-reports/TEST-*.xml
           retention-days: ${{ env.TEST_REPORT_RETENTION_DAYS }}
+      - name: Update PR check
+        if: >-
+          github.event_name == 'repository_dispatch' &&
+          github.event.client_payload.slash_command.sha != '' &&
+          contains(github.event.client_payload.pull_request.head.sha, github.event.client_payload.slash_command.sha)
+        uses: ./.github/actions/update-check
+        with:
+          pull_request_number: ${{ github.event.client_payload.pull_request.number }}
+          check_name: ${{ github.job }} with secrets
+          conclusion: ${{ job.status }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
   test-other-modules:
     runs-on: ubuntu-latest
