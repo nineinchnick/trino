@@ -211,7 +211,7 @@ features, like:
 * Pushing down:
 
   * :ref:`Limit and Top N - limit with sort items <connector-limit-pushdown>`
-  * Predicates
+  * :ref:`Predicates <predicate-pushdown>`
   * Projections
   * Sampling
   * Aggregations
@@ -249,6 +249,10 @@ a given query.
   to loop indefinitely.
 
 Otherwise, these methods return a result object containing a new table handle.
+
+Each of these methods receives the table handle created thus far, and can add
+additional push down information to it by returning a new table handle created
+from the old one.
 
 The new table handle represents the virtual table derived from applying the
 operation (filter, project, limit, etc.) to the table produced by the table
@@ -296,6 +300,233 @@ the data would be too expensive or time consuming. When throwing
 an exception, use the ``TrinoException`` class with the ``INVALID_ORDER_BY``
 error code and an actionable message, to let users know how to write a valid
 query.
+
+.. _predicate-pushdown:
+
+Predicate pushdown
+^^^^^^^^^^^^^^^^^^
+
+When executing a query with a ``WHERE`` clause, the query plan may
+contain a ``Filter`` operation.
+
+When the query plan contains a ``Filter`` operation, the Trino engine
+tries to optimize the query by pushing down the predicate constraint
+into the connector by calling the ``applyFilter`` method of the
+connector metadata service. This method receives a table handle with
+all optimizations applied thus far, and should return either
+``Optional.empty()`` or a response with a new table handle derived from
+the old one. The constraint which will eventually be applied on the
+underlying source level is accumulated over multiple calls in a
+``ConnectorTableHandle``.  Once the query actually runs,
+``ConnectorRecordSetProvider`` or ``ConnectorPageSourceProvider``
+use whatever optimizations were pushed down to ``ConnectorTableHandle``.
+
+The query optimizer may call ``applyFilter`` for a single query multiple times,
+as it searches for an optimal query plan. It's important that connectors
+return ``Optional.empty()`` from ``applyFilter`` if they can't apply the
+constraint for this invocation even if they support ``WHERE`` clause pushdown
+in general. It's also important to return ``Optional.empty()`` if the
+constraint has already been applied by some previous invocation.
+
+A constraint contains:
+
+* a ``TupleDomain`` summary of possible values (or ranges) for different
+  columns,
+* an expression for pushing down function calls,
+* a map of assignments from variables in the expression to columns,
+* (optional) a predicate which tests a map of columns and their values,
+  it cannot be held on to after the ``applyFilter`` call returns
+* (optional) a set of columns the predicate depends on, must be present
+  if predicate is present.
+
+A ``TupleDomain`` defines a mapping between columns and their domains.
+A ``Domain`` is either a list of possible values or a list of ranges.
+It also contains information about nullability.
+
+If both a predicate and a summary are available, handling the predicate
+is preferred over handling the summary, as the predicate is guaranteed
+to be more strict in filtering out values.
+However it's not possible to store a predicate in the table handle and use
+it later, as the predicate cannot be held on to after the ``applyFilter``
+call returns. This means a predicate can only be used for immediate
+filtering of entire Hive partitions/DB shards and is not actually pushed down.
+
+This overlap between the predicate and summary is due to historical reasons,
+as simple comparison pushdown was implemented first via summary, and more
+complex filters such as ``LIKE`` which required more expressive predicates
+were added later.
+
+If a constraint can only be pushed down partially, e.g. a connector for
+a database which doesn't support range matching receives a query with
+``WHERE x = 2 AND y > 5``, the ``y`` column constraint should be
+returned in the ``ConstraintApplicationResult`` from ``applyFilter``.
+In this case the ``y > 5`` part of the filter will be applied by Trino
+engine, and not pushed down.
+
+Let's start with a simple example which only looks at ``TupleDomain``:
+
+.. code-block:: java
+
+    @Override
+    public Optional<ConstraintApplicationResult<ConnectorTableHandle>> applyFilter(ConnectorSession session, ConnectorTableHandle tableHandle, Constraint constraint)
+    {
+        ExampleTableHandle handle = (ExampleTableHandle) tableHandle;
+
+        TupleDomain<ColumnHandle> oldDomain = handle.getConstraint();
+        TupleDomain<ColumnHandle> newDomain = oldDomain.intersect(constraint.getSummary());
+        if (oldDomain.equals(newDomain)) {
+            // Nothing has changed, return empty Option
+            return Optional.empty();
+        }
+
+        handle = new ExampleTableHandle(newDomain);
+        return Optional.of(new ConstraintApplicationResult<>(handle, TupleDomain.all(), false));
+    }
+
+The ``TupleDomain`` from the constraint is intersected with the ``TupleDomain``
+already applied to the ``TableHandle`` to form a ``newDomain``.
+If filtering hasn't changed, an ``Optional.empty()`` result is returned to
+notify the planner that this optimization path has reached it's end.
+
+In this case we assume the example connector pushes down the ``TupleDomain``
+perfectly - all Trino data types are supported with same semantics in our
+data source. In this case there are no filters which we need to apply in Trino
+and our ``ConstraintApplicationResult`` can set ``remainingFilter`` to
+``TupleDomain.all()``.
+
+This pushdown implementation is quite similar to many Trino connectors
+- see ``MongoMetadata``, ``BigQueryMetadata``, ``KafkaMetadata``.
+
+Let's move on to a more complex example with expression pushdown (a simplified
+version of ``DefaultJdbcMetadata.applyFilter`` with comments):
+
+.. code-block:: java
+
+    @Override
+    public Optional<ConstraintApplicationResult<ConnectorTableHandle>> applyFilter(ConnectorSession session, ConnectorTableHandle table, Constraint constraint)
+    {
+        JdbcTableHandle handle = (JdbcTableHandle) table;
+
+        TupleDomain<ColumnHandle> oldDomain = handle.getConstraint();
+        TupleDomain<ColumnHandle> newDomain = oldDomain.intersect(constraint.getSummary());
+        List<String> newConstraintExpressions;
+        TupleDomain<ColumnHandle> remainingFilter;
+        Optional<ConnectorExpression> remainingExpression;
+        if (newDomain.isNone()) {
+            newConstraintExpressions = ImmutableList.of();
+            remainingFilter = TupleDomain.all();
+            remainingExpression = Optional.of(Constant.TRUE);
+        }
+        else {
+            // We need to decide which columns to push down.
+            // Since this is a base class for many JDBC-based connectors, each
+            // having different Trino type mappings and comparison semantics
+            // it needs to be flexible.
+
+            Map<ColumnHandle, Domain> domains = newDomain.getDomains().orElseThrow();
+            List<JdbcColumnHandle> columnHandles = domains.keySet().stream()
+                    .map(JdbcColumnHandle.class::cast)
+                    .collect(toImmutableList());
+
+            // Get information about how to push down every column based on it's
+            // JDBC data type
+            List<ColumnMapping> columnMappings = jdbcClient.toColumnMappings(
+                    session,
+                    columnHandles.stream()
+                            .map(JdbcColumnHandle::getJdbcTypeHandle)
+                            .collect(toImmutableList()));
+
+            // Calculate the domains which can be safely pushed down (supported)
+            // and those which need to be filtered in Trino (unsupported)
+            Map<ColumnHandle, Domain> supported = new HashMap<>();
+            Map<ColumnHandle, Domain> unsupported = new HashMap<>();
+            for (int i = 0; i < columnHandles.size(); i++) {
+                JdbcColumnHandle column = columnHandles.get(i);
+                DomainPushdownResult pushdownResult = columnMappings.get(i).getPredicatePushdownController().apply(session, domains.get(column));
+                supported.put(column, pushdownResult.getPushedDown());
+                unsupported.put(column, pushdownResult.getRemainingFilter());
+            }
+
+            newDomain = TupleDomain.withColumnDomains(supported);
+            remainingFilter = TupleDomain.withColumnDomains(unsupported);
+
+            // Do we want to handle expression pushdown?
+            if (isComplexExpressionPushdown(session)) {
+                List<String> newExpressions = new ArrayList<>();
+                List<ConnectorExpression> remainingExpressions = new ArrayList<>();
+                // Each expression can be broken down into a list of conjuncts
+                // joined with AND. We handle each conjunct separately.
+                for (ConnectorExpression expression : extractConjuncts(constraint.getExpression())) {
+                    // Try to convert the conjunct into something which is
+                    // understood by the underlying JDBC data source
+                    Optional<String> converted = jdbcClient.convertPredicate(session, expression, constraint.getAssignments());
+                    if (converted.isPresent()) {
+                        newExpressions.add(converted.get());
+                    }
+                    else {
+                        remainingExpressions.add(expression);
+                    }
+                }
+                // Calculate which parts of the expresion can be pushed down
+                // and which need to be calculated in Trino engine
+                newConstraintExpressions = ImmutableSet.<String>builder()
+                        .addAll(handle.getConstraintExpressions())
+                        .addAll(newExpressions)
+                        .build().asList();
+                remainingExpression = Optional.of(and(remainingExpressions));
+            }
+            else {
+                newConstraintExpressions = ImmutableList.of();
+                remainingExpression = Optional.empty();
+            }
+        }
+
+        // Return empty Optional if nothing changed in filtering
+        if (oldDomain.equals(newDomain) &&
+                handle.getConstraintExpressions().equals(newConstraintExpressions)) {
+            return Optional.empty();
+        }
+
+        handle = new JdbcTableHandle(
+                handle.getRelationHandle(),
+                newDomain,
+                newConstraintExpressions,
+                ...);
+
+        return Optional.of(
+                remainingExpression.isPresent()
+                        ? new ConstraintApplicationResult<>(handle, remainingFilter, remainingExpression.get(), precalculateStatisticsForPushdown)
+                        : new ConstraintApplicationResult<>(handle, remainingFilter, precalculateStatisticsForPushdown));
+    }
+
+In this example we are implementing a base class for many JDBC connectors,
+so we have to handle all the nuances of different JDBC-capable databases.
+We need to ensure that if a constraint gets pushed down, it should work
+exactly the same in the underlying data source and produce the same results
+as it would in Trino.
+
+For example, string comparison in some databases is case-insensitive, which
+means for those databases we can't push it down since in Trino string
+comparison is case-sensitive.
+
+To handle push down for all the different JDBC types we need a
+``PredicatePushdownController`` which decides if a column domain
+can be pushed down. In the example code above we obtain it from a
+``JdbcClient`` implementation specific to that database. Note that
+this interface is only needed because we are trying to be generic. In non-JDBC
+databases the rules for pushing down different types would usually be
+implemented directly, without going through a ``PredicatePushdownController``
+interface.
+
+Once we split all ``TupleDomains`` into those that can be pushed down, and
+those which will be handled in Trino, expressions can be separated as well.
+We start by splitting each constraint expression into conjuncts - smaller
+expressions joined with AND - and handle each conjunct individually. Each one
+is converted using connector-specific rules, as defined by our ``JdbcClient``
+implementation to be more flexible. This provides an opportunity for each
+JDBC-based connector to use the full expressive power of the underlying database
+language. Those conjuncts which weren't converted are returned as
+``remainingExpression`` and will be evaluated by the Trino engine.
 
 .. _connector-split-manager:
 
