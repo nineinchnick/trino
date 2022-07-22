@@ -77,7 +77,7 @@ public class TrinoCliLauncher
     protected ProcessBuilder getProcessBuilder(List<String> arguments)
     {
         List<String> command = ImmutableList.<String>builder()
-                .add("/docker/trino-cli")
+                .add("trino-cli")
                 .addAll(arguments)
                 .build();
 

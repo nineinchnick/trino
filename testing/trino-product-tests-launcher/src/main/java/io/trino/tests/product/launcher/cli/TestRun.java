@@ -132,6 +132,9 @@ public final class TestRun
         @Option(names = "--attach", description = "attach to an existing environment")
         public boolean attach;
 
+        @Option(names = "--no-container", description = "run product tests in a container")
+        public boolean noContainer;
+
         @Option(names = "--debug-suspend-tests", description = "Wait for client to connect in debug mode. Product Tests process only.")
         public boolean debugSuspend;
 
@@ -169,6 +172,7 @@ public final class TestRun
         private final List<String> testArguments;
         private final String environment;
         private final boolean attach;
+        private final boolean noContainer;
         private final Duration timeout;
         private final DockerContainer.OutputMode outputMode;
         private final int startupRetries;
@@ -193,6 +197,7 @@ public final class TestRun
             this.testArguments = ImmutableList.copyOf(requireNonNull(testRunOptions.testArguments, "testRunOptions.testArguments is null"));
             this.environment = requireNonNull(testRunOptions.environment, "testRunOptions.environment is null");
             this.attach = testRunOptions.attach;
+            this.noContainer = testRunOptions.noContainer;
             this.timeout = requireNonNull(testRunOptions.timeout, "testRunOptions.timeout is null");
             this.outputMode = requireNonNull(environmentOptions.output, "environmentOptions.output is null");
             this.startupRetries = testRunOptions.startupRetries;
@@ -250,9 +255,13 @@ public final class TestRun
                 return toIntExact(ENVIRONMENT_SKIPPED_EXIT_CODE);
             }
             try (Environment runningEnvironment = startEnvironment(environment)) {
-                return toIntExact(runningEnvironment.awaitTestsCompletion());
+                if (noContainer) {
+                    return runTests();
+                } else {
+                    return toIntExact(runningEnvironment.awaitTestsCompletion());
+                }
             }
-            catch (RuntimeException e) {
+            catch (RuntimeException | IOException | InterruptedException e) {
                 log.warn(e, "Failed to execute tests");
                 return ExitCode.SOFTWARE;
             }
@@ -295,20 +304,23 @@ public final class TestRun
 
         private Environment startEnvironment(Environment environment)
         {
-            Collection<DockerContainer> allContainers = environment.getContainers();
-            DockerContainer testsContainer = environment.getContainer(TESTS);
-
             if (!attach) {
-                // Reestablish dependency on every startEnvironment attempt
-                Collection<DockerContainer> environmentContainers = allContainers.stream()
-                        .filter(container -> !container.equals(testsContainer))
-                        .collect(toImmutableList());
-                testsContainer.dependsOn(environmentContainers);
+                if (!noContainer) {
+                    Collection<DockerContainer> allContainers = environment.getContainers();
+                    DockerContainer testsContainer = environment.getContainer(TESTS);
+                    // Reestablish dependency on every startEnvironment attempt
+                    Collection<DockerContainer> environmentContainers = allContainers.stream()
+                            .filter(container -> !container.equals(testsContainer))
+                            .collect(toImmutableList());
+                    testsContainer.dependsOn(environmentContainers);
+                }
 
-                log.info("Starting environment '%s' with config '%s' and options '%s'. Trino will be started using JAVA_HOME: %s.", this.environment, environmentConfig.getConfigName(), extraOptions, jdkVersion.getJavaHome());
+                log.info("Starting environment '%s' with config '%s' and options '%s'. Trino will be started using JAVA_HOME: %s.",
+                        this.environment, environmentConfig.getConfigName(), extraOptions, jdkVersion.getJavaHome());
                 environment.start();
             }
-            else {
+            else if (!noContainer) {
+                DockerContainer testsContainer = environment.getContainer(TESTS);
                 testsContainer.setNetwork(new ExistingNetwork(Environment.PRODUCT_TEST_LAUNCHER_NETWORK));
                 // TODO prune previous ptl-tests container
                 testsContainer.start();
@@ -324,55 +336,13 @@ public final class TestRun
                     .setStartupRetries(startupRetries)
                     .setLogsBaseDir(logsDirBase);
 
-            builder.configureContainer(TESTS, this::mountReportsDir);
-            builder.configureContainer(TESTS, container -> {
-                List<String> temptoJavaOptions = Splitter.on(" ").omitEmptyStrings().splitToList(
-                        container.getEnvMap().getOrDefault("TEMPTO_JAVA_OPTS", ""));
-
-                if (debug) {
-                    temptoJavaOptions = new ArrayList<>(temptoJavaOptions);
-                    temptoJavaOptions.add(format("-agentlib:jdwp=transport=dt_socket,server=y,suspend=%s,address=0.0.0.0:5007", debugSuspend ? "y" : "n"));
-                    unsafelyExposePort(container, 5007); // debug port
-                }
-
-                if (System.getenv("CONTINUOUS_INTEGRATION") != null) {
-                    container.withEnv("CONTINUOUS_INTEGRATION", "true");
-                }
-                container
-                        // the test jar is hundreds MB and file system bind is much more efficient
-                        .withFileSystemBind(testJar.getPath(), "/docker/test.jar", READ_ONLY)
-                        .withFileSystemBind(cliJar.getPath(), "/docker/trino-cli", READ_ONLY)
-                        .withCopyFileToContainer(forClasspathResource("docker/presto-product-tests/common/standard/set-trino-cli.sh"), "/etc/profile.d/set-trino-cli.sh")
-                        .withEnv("JAVA_HOME", jdkVersion.getJavaHome())
-                        .withCommand(ImmutableList.<String>builder()
-                                .add(
-                                        jdkVersion.getJavaCommand(),
-                                        "-Xmx1g",
-                                        // Force Parallel GC to ensure MaxHeapFreeRatio is respected
-                                        "-XX:+UseParallelGC",
-                                        "-XX:MinHeapFreeRatio=10",
-                                        "-XX:MaxHeapFreeRatio=10",
-                                        "-Djava.util.logging.config.file=/docker/presto-product-tests/conf/tempto/logging.properties",
-                                        "-Duser.timezone=Asia/Kathmandu",
-                                        // Tempto has progress logging built in
-                                        "-DProgressLoggingListener.enabled=false")
-                                .addAll(temptoJavaOptions)
-                                .add(
-                                        "-jar", "/docker/test.jar",
-                                        "--config", String.join(",", ImmutableList.<String>builder()
-                                                .add("tempto-configuration.yaml") // this comes from classpath
-                                                .add("/docker/presto-product-tests/conf/tempto/tempto-configuration-for-docker-default.yaml")
-                                                .add(CONTAINER_TEMPTO_PROFILE_CONFIG)
-                                                .add(environmentConfig.getTemptoEnvironmentConfigFile())
-                                                .add(container.getEnvMap().getOrDefault("TEMPTO_CONFIG_FILES", "/dev/null"))
-                                                .build()))
-                                .addAll(testArguments)
-                                .addAll(reportsDirOptions(reportsDirBase))
-                                .build().toArray(new String[0]));
-            });
-
+            if (noContainer) {
+                builder.removeContainer(TESTS);
+            } else {
+                builder.configureContainer(TESTS, this::mountReportsDir);
+                builder.configureContainer(TESTS, this::setupTestContainer);
+            }
             builder.setAttached(attach);
-
             return builder.build(getStandardListeners(logsDirBase));
         }
 
@@ -394,6 +364,118 @@ public final class TestRun
             cleanOrCreateHostPath(reportsDirBase);
             container.withFileSystemBind(reportsDirBase.toString(), CONTAINER_REPORTS_DIR, READ_WRITE);
             log.info("Exposing tests report dir in host directory '%s'", reportsDirBase);
+        }
+
+        private void setupTestContainer(DockerContainer container)
+        {
+            List<String> temptoJavaOptions = Splitter.on(" ").omitEmptyStrings().splitToList(
+                    container.getEnvMap().getOrDefault("TEMPTO_JAVA_OPTS", ""));
+
+            if (debug) {
+                temptoJavaOptions = new ArrayList<>(temptoJavaOptions);
+                temptoJavaOptions.add(format("-agentlib:jdwp=transport=dt_socket,server=y,suspend=%s,address=0.0.0.0:5007", debugSuspend ? "y" : "n"));
+                unsafelyExposePort(container, 5007); // debug port
+            }
+
+            if (System.getenv("CONTINUOUS_INTEGRATION") != null) {
+                container.withEnv("CONTINUOUS_INTEGRATION", "true");
+            }
+            container
+                    // the test jar is hundreds MB and file system bind is much more efficient
+                    .withFileSystemBind(testJar.getPath(), "/docker/test.jar", READ_ONLY)
+                    .withFileSystemBind(cliJar.getPath(), "/docker/trino-cli", READ_ONLY)
+                    .withCopyFileToContainer(forClasspathResource("docker/presto-product-tests/common/standard/set-trino-cli.sh"), "" +
+                            "/etc/profile.d/set-trino-cli.sh")
+                    .withEnv("JAVA_HOME", jdkVersion.getJavaHome())
+                    .withCommand(ImmutableList.<String>builder()
+                            .add(
+                                    jdkVersion.getJavaCommand(),
+                                    "-Xmx1g",
+                                    // Force Parallel GC to ensure MaxHeapFreeRatio is respected
+                                    "-XX:+UseParallelGC",
+                                    "-XX:MinHeapFreeRatio=10",
+                                    "-XX:MaxHeapFreeRatio=10",
+                                    "-Djava.util.logging.config.file=/docker/presto-product-tests/conf/tempto/logging.properties",
+                                    "-Duser.timezone=Asia/Kathmandu",
+                                    // Tempto has progress logging built in
+                                    "-DProgressLoggingListener.enabled=false")
+                            .addAll(temptoJavaOptions)
+                            .add(
+                                    "-jar", "/docker/test.jar",
+                                    "--config", String.join(",", ImmutableList.<String>builder()
+                                            .add("tempto-configuration.yaml") // this comes from classpath
+                                            .add("/docker/presto-product-tests/conf/tempto/tempto-configuration-for-docker-default.yaml")
+                                            .add(CONTAINER_TEMPTO_PROFILE_CONFIG)
+                                            .add(environmentConfig.getTemptoEnvironmentConfigFile())
+                                            .add(container.getEnvMap().getOrDefault("TEMPTO_CONFIG_FILES", "/dev/null"))
+                                            .build()))
+                            .addAll(testArguments)
+                            .addAll(reportsDirOptions(reportsDirBase))
+                            .build().toArray(new String[0]));
+        }
+
+        private int runTests()
+                throws IOException, InterruptedException
+        {
+            ProcessBuilder builder = new ProcessBuilder();
+            builder.redirectOutput(ProcessBuilder.Redirect.INHERIT);
+            builder.redirectError(ProcessBuilder.Redirect.INHERIT);
+            builder.environment().put("PATH", builder.environment().getOrDefault("PATH", "") + ":" + cliJar.getParent());
+
+            List<String> temptoJavaOptions = Splitter.on(" ").omitEmptyStrings().splitToList(
+                    builder.environment().getOrDefault("TEMPTO_JAVA_OPTS", ""));
+
+            if (debug) {
+                temptoJavaOptions = new ArrayList<>(temptoJavaOptions);
+                temptoJavaOptions.add(format("-agentlib:jdwp=transport=dt_socket,server=y,suspend=%s,address=0.0.0.0:5007", debugSuspend ? "y" : "n"));
+            }
+
+            if (System.getenv("CONTINUOUS_INTEGRATION") != null) {
+                builder.environment().put("CONTINUOUS_INTEGRATION", "true");
+            }
+            // TODO hardcoded to avoid dealing with reading files from the PTL JAR
+            /*
+            String loggingProperties = requireNonNull(this.getClass().getClassLoader().getResource("docker/presto-product-tests/conf/tempto/logging.properties")).toString();
+            String temptoConfig = requireNonNull(this.getClass().getClassLoader().getResource("docker/presto-product-tests/conf/tempto/tempto-configuration-for-docker-default.yaml")).toString();
+            String temptoProfile = requireNonNull(this.getClass().getClassLoader().getResource(CONTAINER_TEMPTO_PROFILE_CONFIG.replaceAll("^/+", ""))).toString();
+             */
+
+            String basePath = "testing/trino-product-tests-launcher/src/main/resources";
+            String loggingProperties = basePath + "/docker/presto-product-tests/conf/tempto/logging.properties";
+            String temptoConfig = basePath + "/docker/presto-product-tests/conf/tempto/tempto-configuration-for-docker-default.yaml";
+            String temptoProfile = basePath + CONTAINER_TEMPTO_PROFILE_CONFIG;
+            // TODO would be dope to convert container names like presto-master to localhost + exporter port
+            List<String> command = ImmutableList.<String>builder()
+                    .add(
+                            // TODO ignoring jdkVersion, we should assert that it's not explicitly set
+                            "java",
+                            "-Xmx1g",
+                            // Force Parallel GC to ensure MaxHeapFreeRatio is respected
+                            "-XX:+UseParallelGC",
+                            "-XX:MinHeapFreeRatio=10",
+                            "-XX:MaxHeapFreeRatio=10",
+                            "-Djava.util.logging.config.file=" + loggingProperties,
+                            "-Duser.timezone=Asia/Kathmandu",
+                            // Tempto has progress logging built in
+                            "-DProgressLoggingListener.enabled=false")
+                    .addAll(temptoJavaOptions)
+                    .add(
+                            "-jar", testJar.getPath(),
+                            "--config", String.join(",", ImmutableList.<String>builder()
+                                    .add("tempto-configuration.yaml") // this comes from classpath
+                                    .add(temptoConfig)
+                                    .add(temptoProfile)
+                                    .add(environmentConfig.getTemptoEnvironmentConfigFile())
+                                    .add(builder.environment().getOrDefault("TEMPTO_CONFIG_FILES", "/dev/null"))
+                                    .build()))
+                    .addAll(testArguments)
+                    .add("--report-dir", reportsDirBase.toString())
+                    .build();
+            builder.command(command);
+
+            log.info("Executing command: %s", command);
+            Process process = builder.start();
+            return process.waitFor();
         }
     }
 }
