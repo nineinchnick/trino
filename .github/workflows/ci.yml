@@ -74,6 +74,16 @@ jobs:
       - name: Test Docker Image
         run: core/docker/build.sh
 
+  check-commits:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Check Commits
+        uses: nineinchnick/block-commits-action@cf4e63bde529c78a14e987b6648046e0b815305a
+        with:
+          action-merge: fail
+          action-fixup: request-changes
+
   error-prone-checks:
     runs-on: ubuntu-latest
     timeout-minutes: 45
