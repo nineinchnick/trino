@@ -228,6 +228,7 @@ public class ExecutingStatementResource
         ResponseBuilder response = Response.ok(queryResults);
 
         ProtocolHeaders protocolHeaders = query.getProtocolHeaders();
+        response.header(protocolHeaders.responseNextUri(), queryResults.getNextUri());
         query.getSetCatalog().ifPresent(catalog -> response.header(protocolHeaders.responseSetCatalog(), catalog));
         query.getSetSchema().ifPresent(schema -> response.header(protocolHeaders.responseSetSchema(), schema));
         query.getSetPath().ifPresent(path -> response.header(protocolHeaders.responseSetPath(), path));
