@@ -18,7 +18,8 @@ features. Therefore benchmarks are organized in suites, like:
 
 ### Requirements
 
-* Presto already installed on the target environment
+* JDK 8 for compiling and running Benchto
+* Trino already installed on the target environment
 * Basic understanding of Benchto [components and architecture](https://github.com/trinodb/benchto)
 * Benchto service [configured and running](https://github.com/trinodb/benchto/tree/master/benchto-service)
 * An environment [defined in Benchto service](https://github.com/trinodb/benchto/tree/master/benchto-service#creating-environment)

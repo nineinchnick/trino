@@ -12,6 +12,9 @@
     <name>trino-benchto-benchmarks</name>
 
     <properties>
+        <maven.compiler.target>1.8</maven.compiler.target>
+        <maven.compiler.source>1.8</maven.compiler.source>
+
         <air.main.basedir>${project.parent.basedir}</air.main.basedir>
         <air.check.fail-dependency>false</air.check.fail-dependency>
         <air.check.fail-duplicate-finder>false</air.check.fail-duplicate-finder>
