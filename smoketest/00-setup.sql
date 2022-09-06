@@ -36,3 +36,9 @@ $$
                EXCEPT
                SELECT unnest($2))
 $$ LANGUAGE SQL;
+
+CREATE OR REPLACE FUNCTION contains (haystack ANYARRAY, needle ANYELEMENT)
+RETURNS BOOLEAN AS
+$$
+  SELECT needle = ANY(haystack)
+$$ LANGUAGE SQL;
