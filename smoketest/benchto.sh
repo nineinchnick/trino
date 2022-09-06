@@ -132,7 +132,7 @@ cat <<XML >"$RES_DIR/core-site.xml"
 </configuration>
 XML
 hms_image=ghcr.io/trinodb/testing/hive3.1-hive:latest
-if [ "$(arch)" == arm64 ]; then
+if [ "$(uname -m)" == arm64 ]; then
     hms_image=testing/hive3.1-hive:latest-linux-arm64
 fi
 run hms \
@@ -184,9 +184,9 @@ for TRINO_VERSION in "${VERSIONS[@]}"; do
                 -Dmaven.site.skip=true -Dmaven.source.skip=true -Dmaven.javadoc.skip=true \
                 -Dair.check.skip-all \
                 -pl "$package_list"
-            ./core/docker/build.sh -a "$(arch)"
+            ./core/docker/build.sh -a "$(uname -m)"
         )
-        trino_image=trino:$TRINO_VERSION-$(arch)
+        trino_image=trino:$TRINO_VERSION-$(uname -m)
     fi
     # TODO remove, not used
     #./mvnw package --strict-checksums -q -T C1 \
