@@ -1,5 +1,6 @@
 -- Validate benchmarks
 -- Check for statistical outliers on every metric across all executions of every run (query?) of every benchmark.
+-- The number of runs should be equal across all environments and there should be no invalid executions and no outliers.
 /* TODO remaining questions:
 - how to explain different number of runs between envs
 - do we want to distinguish duration from other metrics?

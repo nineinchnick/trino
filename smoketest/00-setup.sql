@@ -29,12 +29,12 @@ CREATE OR REPLACE AGGREGATE array_union_agg(ANYARRAY) (
   INITCOND = '{}'
 );
 
-CREATE OR REPLACE FUNCTION array_subtraction(ANYARRAY, ANYARRAY)
+CREATE OR REPLACE FUNCTION array_subtraction(a ANYARRAY, b ANYARRAY)
 RETURNS anyarray AS
 $$
-  SELECT ARRAY(SELECT unnest($1)
+  SELECT ARRAY(SELECT unnest(a)
                EXCEPT
-               SELECT unnest($2))
+               SELECT unnest(b))
 $$ LANGUAGE SQL;
 
 CREATE OR REPLACE FUNCTION contains (haystack ANYARRAY, needle ANYELEMENT)
@@ -42,3 +42,8 @@ RETURNS BOOLEAN AS
 $$
   SELECT needle = ANY(haystack)
 $$ LANGUAGE SQL;
+
+CREATE TYPE floatrange AS RANGE (
+    subtype = float8,
+    subtype_diff = float8mi
+);

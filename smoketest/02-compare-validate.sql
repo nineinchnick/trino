@@ -1,17 +1,18 @@
 -- Comparison validation
 -- Check which benchmark runs are comparable across environments and if not, which attributes are different
+-- The number of runs should be equal across environments, there should be no invalid runs and all runs should be comparable.
 WITH
 attributes AS (
     SELECT
         benchmark_run_id
-      , array_agg(row(name, value) ORDER BY name) AS tuples
+      , array_agg(row(name, value) ORDER BY name, value) AS tuples
     FROM benchmark_runs_attributes
     GROUP BY 1
 )
 , variables AS (
     SELECT
         benchmark_run_id
-      , array_agg(row(name, value) ORDER BY name) AS tuples
+      , array_agg(row(name, value) ORDER BY name, value) AS tuples
     FROM benchmark_runs_variables
     GROUP BY 1
 )
