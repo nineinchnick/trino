@@ -238,7 +238,7 @@ JSON
             --server ${prefix}trino:8080
 
     cat <<YAML >"$RES_DIR/application.yaml"
-benchmarks: src/main/resources/benchmarks"
+benchmarks: src/main/resources/benchmarks
 sql: src/main/resources/sql
 query-results-dir: target/results
 
@@ -262,7 +262,7 @@ macros:
   drop-caches:
     command: echo "Dropping caches"
   sleep-4s:
-    command: echo "Sleeping for 4s" && sleep 4
+    command: echo "Sleeping for 0.4s" && sleep 0.4
 
 benchmark:
   feature:
@@ -271,7 +271,7 @@ benchmark:
 YAML
 
     cat <<'YAML' >"$RES_DIR/overrides.yaml"
-runs: 3
+runs: 5
 tpch_300: tpch_sf1_orc
 scale_300: 1
 tpch_1000: tpch_sf1_orc
@@ -295,6 +295,7 @@ YAML
             --benchmarks "$SCRIPT_DIR"/../testing/trino-benchto-benchmarks/src/main/resources/benchmarks \
             --activeBenchmarks=presto/tpch \
             --overrides "$RES_DIR/overrides.yaml" \
+            --frequencyCheckEnabled false \
             --timeLimit PT20M
     )
 

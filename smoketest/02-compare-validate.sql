@@ -19,6 +19,7 @@ attributes AS (
     SELECT
         runs.id
       , runs.environment_id
+      , runs.sequence_id
       , runs.status
       , attrs.tuples AS attributes
       , vars.tuples AS variables
@@ -33,6 +34,7 @@ attributes AS (
       , runs.status
       , row_number() OVER (ORDER BY runs.properties, runs.status) AS rownum
       , array_agg(runs.id) AS ids
+      , array_agg(runs.sequence_id) AS seq_ids
       , array_agg(runs.environment_id) AS environment_ids
       , array_agg(envs.name) AS environment_names
     FROM runs
