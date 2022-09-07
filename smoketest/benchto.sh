@@ -288,6 +288,7 @@ YAML
     (
         # application.yaml needs to be in current working directory
         cd "$RES_DIR"
+        jenv local 1.8
         JAVA_HOME=/Library/Java/JavaVirtualMachines/zulu-8.jdk/Contents/Home java -Xmx1g \
             -jar "$local_repo/io/trino/benchto/benchto-driver/0.18/benchto-driver-0.18.jar" \
             --profiles.directory "$RES_DIR" \
