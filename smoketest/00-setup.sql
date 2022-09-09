@@ -42,8 +42,3 @@ RETURNS BOOLEAN AS
 $$
   SELECT needle = ANY(haystack)
 $$ LANGUAGE SQL;
-
-CREATE TYPE floatrange AS RANGE (
-    subtype = float8,
-    subtype_diff = float8mi
-);
