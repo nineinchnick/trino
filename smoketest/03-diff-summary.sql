@@ -54,9 +54,9 @@ attributes AS (
 )
 , run_pairs AS (
     SELECT
-        env_left.name AS left_env_name
+      /*  env_left.name AS left_env_name
       , env_right.name AS right_env_name
-      , ex_left.name AS metric
+      ,*/ ex_left.name AS metric
       , ex_left.unit AS unit
       -- result
       , cast(100 * (ex_right.mean - ex_left.mean) / nullif(cast(greatest(ex_right.mean, ex_left.mean) as real), 0) AS decimal(5,2)) AS diff_pct
@@ -71,41 +71,41 @@ attributes AS (
 )
 , pair_stats AS (
     SELECT
-        left_env_name
+      /*  left_env_name
       , right_env_name
-      , metric
+      ,*/ metric
       , unit
       , min(diff_pct) as min
       , max(diff_pct) as max
     FROM run_pairs
-    GROUP BY left_env_name, right_env_name, metric, unit
+    GROUP BY /*left_env_name, right_env_name,*/ metric, unit
 )
 , dimensions AS (
     SELECT
-        left_env_name
+      /*  left_env_name
       , right_env_name
-      , metric
+      ,*/ metric
       , unit
     FROM run_pairs
-    GROUP BY left_env_name, right_env_name, metric, unit
+    GROUP BY /*left_env_name, right_env_name,*/ metric, unit
 )
 , histogram as (
     SELECT
-        left_env_name
+      /*  left_env_name
       , right_env_name
-      , metric
+      ,*/ metric
       , unit
       , width_bucket(diff_pct, s.min, nullif(s.max, s.min), 9) AS bucket
       , numrange(min(diff_pct), max(diff_pct), '[]') AS range
       , count(*) AS freq
     FROM run_pairs r
-    JOIN pair_stats s USING (left_env_name, right_env_name, metric, unit)
-    GROUP BY left_env_name, right_env_name, metric, unit, bucket
+    JOIN pair_stats s USING (/*left_env_name, right_env_name,*/ metric, unit)
+    GROUP BY /*left_env_name, right_env_name,*/ metric, unit, bucket
 )
 SELECT
-    d.left_env_name
+  /*  d.left_env_name
   , d.right_env_name
-  , d.metric
+  ,*/ d.metric
   , d.unit
   , s.bucket
   , range
@@ -113,6 +113,6 @@ SELECT
   , repeat('■', (coalesce(freq, 0)::float / max(freq) over() * 30)::int) as bar
 FROM dimensions d
 CROSS JOIN generate_series(1, 10) s(bucket)
-LEFT JOIN histogram h ON (d.left_env_name, d.right_env_name, d.metric, d.unit, s.bucket) = (h.left_env_name, h.right_env_name, h.metric, h.unit, h.bucket)
-ORDER BY d.left_env_name, d.right_env_name, d.metric, d.unit, s.bucket
+LEFT JOIN histogram h ON (/*d.left_env_name, d.right_env_name,*/ d.metric, d.unit, s.bucket) = (/*h.left_env_name, h.right_env_name,*/ h.metric, h.unit, h.bucket)
+ORDER BY /*d.left_env_name, d.right_env_name,*/ d.metric, d.unit, s.bucket
 ;
