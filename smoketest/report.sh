@@ -116,7 +116,9 @@ function dump_runs() {
     echo >&2 "Got ${#run_ids[@]} runs"
 
     for id in "${run_ids[@]}"; do
-        run_details "${id//[[:blank:]]/}"
+        id=${id//[[:blank:]]/}
+        [ -n "$id" ] || continue
+        run_details "$id"
     done
 }
 

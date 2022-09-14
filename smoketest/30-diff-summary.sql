@@ -31,11 +31,15 @@ attributes AS (
 )
 , measurements AS (
     SELECT
-        id
-      , regexp_replace(name, '^prestoQuery-', '') AS name
-      , unit
-      , value
-    FROM measurements
+        v.id
+      , m.name
+      , m.unit
+      , v.value
+      , array_agg(row(a.name, a.value) ORDER BY a.name) AS attributes
+    FROM measurements v
+    JOIN metrics m ON m.id = v.metric_id
+    JOIN metric_attributes a ON m.id = a.metric_id
+    GROUP BY v.id, m.name, m.unit, v.value
 )
 , execution_devs AS (
     SELECT
