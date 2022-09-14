@@ -104,6 +104,8 @@ run postgres \
     postgres:latest
 sleep 2
 
+benchto_version=0.20-SNAPSHOT
+benchto_image=prestodev/benchto-service
 benchto_host=localhost
 benchto_port=8081
 benchto_url=$benchto_host:$benchto_port
@@ -113,7 +115,7 @@ run benchto \
     -e SPRING_DATASOURCE_USERNAME=postgres \
     -e SPRING_DATASOURCE_PASSWORD=pw \
     -p$benchto_port:8080 \
-    prestodev/benchto-service
+    $benchto_image
 echo "Waiting for Benctho Service to be ready"
 until curl --fail --silent --show-error $benchto_url/ >/dev/null; do sleep 1; done
 
@@ -290,7 +292,7 @@ YAML
         cd "$RES_DIR"
         jenv local 1.8
         JAVA_HOME=/Library/Java/JavaVirtualMachines/zulu-8.jdk/Contents/Home java -Xmx1g \
-            -jar "$local_repo/io/trino/benchto/benchto-driver/0.18/benchto-driver-0.18.jar" \
+            -jar "$local_repo/io/trino/benchto/benchto-driver/$benchto_version/benchto-driver-$benchto_version.jar" \
             --profiles.directory "$RES_DIR" \
             --sql "$SCRIPT_DIR"/../testing/trino-benchto-benchmarks/src/main/resources/sql \
             --benchmarks "$SCRIPT_DIR"/../testing/trino-benchto-benchmarks/src/main/resources/benchmarks \
