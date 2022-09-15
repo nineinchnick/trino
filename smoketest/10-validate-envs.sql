@@ -12,7 +12,7 @@ environments AS (
       , env.name
       , array_agg(row(a.name, a.value) ORDER BY a.name) AS attributes
     FROM environments env
-    LEFT JOIN environment_attributes a ON a.environment_id = env.id
+    LEFT JOIN environment_attributes a ON a.environment_id = env.id AND a.name NOT IN ('startup_logs')
     GROUP BY 1, 2
 )
 , measurements AS (

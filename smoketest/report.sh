@@ -31,8 +31,20 @@ function query_report() {
         "$db_name" \
         "$db_user" \
         --csv "$@" \
-        <<<"$query" \
-        | csv2md
+        <<<"$query" |
+        csv2md
+}
+
+function query_expanded() {
+    local query=$1
+    shift
+    docker exec -i \
+        $container_name \
+        psql \
+        "$db_name" \
+        "$db_user" \
+        --expanded "$@" \
+        <<<"$query"
 }
 
 function query_tuples() {
@@ -45,15 +57,14 @@ function query_tuples() {
         "$db_user" \
         -t \
         -q \
-        <<<"$query" \
-        "$@"
+        "$@" <<<"$query"
 }
 
 # create a report by executing sql files in order
 function report() {
     local target=report.md
     local title="Benchmarks report"
-    local queries=([0-9][0-9]-*.sql)
+    local queries=(??-*.sql)
     local comments desc
 
     mkdir -p "$(dirname "$target")"
@@ -86,6 +97,41 @@ function report() {
     echo "Generated on $(date)" >>"$target"
 }
 
+function env_details() {
+    local id=$1
+    local target=envs/$id.md
+
+    mkdir -p "$(dirname "$target")"
+    echo >&2 "Generating report for env $id"
+    {
+        echo "Environment details"
+        echo "==========="
+        echo ""
+        echo "## Properties"
+        query_expanded "$(<env_details.sql)" -v "id=$id"
+        echo ""
+        echo "Generated on $(date)"
+    } >"$target"
+}
+
+# dump all env details into separate files
+function dump_envs() {
+    echo >&2 "Listing all environments"
+    read -r -d '' query <<SQL || true
+SELECT id
+FROM environments
+ORDER BY id;
+SQL
+    mapfile -t ids < <(query_tuples "$query")
+    echo >&2 "Got ${#ids[@]} environments"
+
+    for id in "${ids[@]}"; do
+        id=${id//[[:blank:]]/}
+        [ -n "$id" ] || continue
+        env_details "$id"
+    done
+}
+
 function run_details() {
     local id=$1
     local target=runs/$id.md
@@ -112,10 +158,16 @@ function run_details() {
 # dump all run details into separate files
 function dump_runs() {
     echo >&2 "Listing all runs"
-    mapfile -t run_ids < <(query_tuples "$(<runs.sql)")
-    echo >&2 "Got ${#run_ids[@]} runs"
+    read -r -d '' query <<SQL || true
+SELECT id
+FROM benchmark_runs
+WHERE status = 'ENDED'
+ORDER BY id;
+SQL
+    mapfile -t ids < <(query_tuples "$query")
+    echo >&2 "Got ${#ids[@]} runs"
 
-    for id in "${run_ids[@]}"; do
+    for id in "${ids[@]}"; do
         id=${id//[[:blank:]]/}
         [ -n "$id" ] || continue
         run_details "$id"
@@ -123,4 +175,5 @@ function dump_runs() {
 }
 
 report
+dump_envs
 dump_runs

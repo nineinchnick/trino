@@ -76,7 +76,20 @@ function run() {
     docker run -d --name "$container_name" "$@"
 }
 
-cleanup() {
+function env_exists() {
+    local benchto_url=$1
+    local benchto_env=$2
+    local resp name
+    if ! resp=$(curl -fLOsS \
+        -H 'Content-Type: application/json' \
+        "http://$benchto_url/v1/environment/$benchto_env") ||
+        ! name=$(jq -er '.name' <<<"$resp") ||
+        [ -z "$name" ]; then
+        return 1
+    fi
+}
+
+function cleanup() {
     local code=$?
     if [ "$code" -ne 0 ]; then
         echo >&2 "errexit on line $(caller)"
@@ -203,21 +216,40 @@ for TRINO_VERSION in "${VERSIONS[@]}"; do
         )
         trino_image=trino:$TRINO_VERSION-$(uname -m)
     fi
-    # TODO remove, not used
-    #./mvnw package --strict-checksums -q -T C1 \
-    #    -DskipTests \
-    #    -Dmaven.site.skip=true -Dmaven.source.skip=true -Dmaven.javadoc.skip=true \
-    #    -Dair.check.skip-all \
-    #    -pl :trino-benchto-benchmarks -am
 
-    # unique for every run
-    benchto_env=trino-$TRINO_VERSION-$(git log -1 --format='%h')
-    read -r -d '' data <<JSON || true
+    # environment name must be unique for every run, because it's attributes would get overwritten
+    seq=1
+    while true; do
+        benchto_env=trino-$TRINO_VERSION-$(git log -1 --format='%h')-"$seq"
+        env_exists "$benchto_url", "$benchto_env" || break
+        ((seq++))
+    done
+
+    # NOTICE: the container requires at least 16GB of memory
+    # TODO deploy this using helm charts to have a multinode cluster?
+    run trino \
+        --link ${prefix}hms \
+        -p8080:8080 \
+        -v "$RES_DIR/config.properties":/etc/trino/config.properties \
+        -v "$RES_DIR/hive.properties":/etc/trino/catalog/hive.properties \
+        -m16G \
+        "$trino_image" \
+        /usr/lib/trino/bin/launcher run --etc-dir /etc/trino -Dnode.id=trino -J-XX:MaxRAMPercentage=90
+    echo "Waiting for Trino to be ready"
+    until docker inspect ${prefix}trino --format "{{json .State.Health.Status }}" | grep -q '"healthy"'; do sleep 1; done
+
+    # create a new Benchto environment
+    read -r -d '' template <<'JSON' || true
 {
-    "version": "$TRINO_VERSION",
-    "commit": "$(git log -1 --format='%H')"
+    "version": $version,
+    "commit": $commit,
+    "startup_logs": $logs
 }
 JSON
+    data=$(jq -n "$template" \
+        --arg version "$TRINO_VERSION" \
+        --arg commit "$(git log -1 --format='%H')" \
+        --arg logs "$(docker logs ${prefix}trino 2>&1)")
     curl \
         -H 'Content-Type: application/json' \
         -d "$data" \
@@ -233,19 +265,6 @@ JSON
         -H 'Content-Type: application/json' \
         -d "$data" \
         "http://$benchto_url/v1/tag/$benchto_env"
-
-    # NOTICE: the container requires at least 16GB of memory
-    # TODO deploy this using helm charts to have a multinode cluster?
-    run trino \
-        --link ${prefix}hms \
-        -p8080:8080 \
-        -v "$RES_DIR/config.properties":/etc/trino/config.properties \
-        -v "$RES_DIR/hive.properties":/etc/trino/catalog/hive.properties \
-        -m16G \
-        "$trino_image" \
-        /usr/lib/trino/bin/launcher run --etc-dir /etc/trino -Dnode.id=trino -J-XX:MaxRAMPercentage=90
-    echo "Waiting for Trino to be ready"
-    until docker inspect ${prefix}trino --format "{{json .State.Health.Status }}" | grep -q '"healthy"'; do sleep 1; done
 
     # make sure this fits the current host by setting factors
     echo "Generating test data"
