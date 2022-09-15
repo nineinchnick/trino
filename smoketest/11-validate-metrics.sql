@@ -69,8 +69,6 @@ SELECT
   -- , array_sort(array_distinct(flatten(array_agg(s.names_outliers)))) AS names_outliers
   -- , array_sort(array_distinct(flatten(array_agg(s.names_all)))) AS names_ok
   , array_union_agg(s.names_outliers) AS names_outliers
-  -- TODO only print these if there are any outliers?
-  --, array_subtraction(array_union_agg(s.names_all), array_union_agg(s.names_outliers)) AS names_ok
 FROM metrics m
 LEFT JOIN execution_stats s ON s.metric_id = m.id
 GROUP BY 1, 2

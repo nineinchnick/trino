@@ -141,6 +141,19 @@ run hms \
     -p9083:9083 \
     -v "$RES_DIR"/core-site.xml:/etc/hadoop/conf/core-site.xml \
     "$hms_image"
+
+cat <<INI >"$RES_DIR/config.properties"
+#single node install config
+coordinator=true
+node-scheduler.include-coordinator=true
+http-server.http.port=8080
+discovery.uri=http://localhost:8080
+
+# custom options
+query.max-memory-per-node=11GB
+memory.heap-headroom-per-node=3GB
+INI
+
 cat <<INI >"$RES_DIR/hive.properties"
 connector.name=hive
 hive.metastore.uri=thrift://${prefix}hms:9083
@@ -221,18 +234,24 @@ JSON
         -d "$data" \
         "http://$benchto_url/v1/tag/$benchto_env"
 
+    # NOTICE: the container requires at least 16GB of memory
     # TODO deploy this using helm charts to have a multinode cluster?
     run trino \
         --link ${prefix}hms \
         -p8080:8080 \
+        -v "$RES_DIR/config.properties":/etc/trino/config.properties \
         -v "$RES_DIR/hive.properties":/etc/trino/catalog/hive.properties \
-        "$trino_image"
+        -m16G \
+        "$trino_image" \
+        /usr/lib/trino/bin/launcher run --etc-dir /etc/trino -Dnode.id=trino -J-XX:MaxRAMPercentage=90
     echo "Waiting for Trino to be ready"
     until docker inspect ${prefix}trino --format "{{json .State.Health.Status }}" | grep -q '"healthy"'; do sleep 1; done
 
     # make sure this fits the current host by setting factors
     echo "Generating test data"
-    testing/trino-benchto-benchmarks/generate_schemas/generate-tpch.py --factors sf1 --formats orc |
+    # sf10 will take about 5 minutes and will cause the benchto-hms image to grow to about 3GB
+    # benchmarking a single environment using sf10 should take up to 30 minutes
+    testing/trino-benchto-benchmarks/generate_schemas/generate-tpch.py --factors sf10 --formats orc |
         docker run -i \
             --link ${prefix}trino \
             "$trino_image" \
@@ -274,12 +293,12 @@ YAML
 
     cat <<'YAML' >"$RES_DIR/overrides.yaml"
 runs: 5
-tpch_300: tpch_sf1_orc
-scale_300: 1
-tpch_1000: tpch_sf1_orc
-scale_1000: 1
-tpch_3000: tpch_sf1_orc
-scale_3000: 1
+tpch_300: tpch_sf10_orc
+scale_300: 10
+tpch_1000: tpch_sf10_orc
+scale_1000: 10
+tpch_3000: tpch_sf10_orc
+scale_3000: 10
 prefix: ""
 YAML
 
@@ -289,8 +308,9 @@ YAML
     # TODO avoid hardcoding the version
     (
         # application.yaml needs to be in current working directory
+        # note there's no --timeLimit, which only makes sense for throughput tests
         cd "$RES_DIR"
-        jenv local 1.8
+        ! command -V jenv >/dev/null || jenv local 1.8
         JAVA_HOME=/Library/Java/JavaVirtualMachines/zulu-8.jdk/Contents/Home java -Xmx1g \
             -jar "$local_repo/io/trino/benchto/benchto-driver/$benchto_version/benchto-driver-$benchto_version.jar" \
             --profiles.directory "$RES_DIR" \
@@ -298,8 +318,7 @@ YAML
             --benchmarks "$SCRIPT_DIR"/../testing/trino-benchto-benchmarks/src/main/resources/benchmarks \
             --activeBenchmarks=presto/tpch \
             --overrides "$RES_DIR/overrides.yaml" \
-            --frequencyCheckEnabled false \
-            --timeLimit PT20M
+            --frequencyCheckEnabled false
     )
 
     docker rm --force ${prefix}trino

@@ -6,7 +6,16 @@
 - do we want to distinguish driver and cluster metrics?
 */
 WITH
-measurements AS (
+environments AS (
+    SELECT
+        env.id
+      , env.name
+      , array_agg(row(a.name, a.value) ORDER BY a.name) AS attributes
+    FROM environments env
+    LEFT JOIN environment_attributes a ON a.environment_id = env.id
+    GROUP BY 1, 2
+)
+, measurements AS (
     SELECT
         v.id
       , m.name
@@ -54,6 +63,7 @@ measurements AS (
 )
 SELECT
     env.name
+  , env.attributes
   , runs.sequence_id
   , array_agg(DISTINCT runs.status) AS statuses
   , count(DISTINCT runs.id) AS num_runs
@@ -66,10 +76,8 @@ SELECT
   -- , array_sort(array_distinct(flatten(array_agg(s.names_outliers)))) AS names_outliers
   -- , array_sort(array_distinct(flatten(array_agg(s.names_all)))) AS names_ok
   , array_union_agg(s.names_outliers) AS names_outliers
-  -- TODO only print these if there are any outliers?
-  --, array_subtraction(array_union_agg(s.names_all), array_union_agg(s.names_outliers)) AS names_ok
 FROM environments env
 LEFT JOIN benchmark_runs runs ON runs.environment_id = env.id
 LEFT JOIN execution_stats s ON s.run_id = runs.id
-GROUP BY 1, 2
+GROUP BY 1, 2, 3
 ;
