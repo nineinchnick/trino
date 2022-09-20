@@ -14,9 +14,8 @@ measurements AS (
 SELECT
     ex.id
   , m.name
-  , m.unit
--- TODO format into human readable values
-  , m.value
+  --, m.unit
+  , format_metric(m.value, m.unit) AS value
 FROM execution_measurements em
 JOIN executions ex ON ex.id = em.execution_id
 JOIN measurements m ON m.id = em.measurement_id

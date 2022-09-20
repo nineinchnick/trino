@@ -28,12 +28,11 @@ measurements AS (
     GROUP BY 1, 2, 3
 )
 SELECT
--- TODO format into human readable values
     name
-  , unit
-  , mean
-  , '±' || round(cast(stddev as numeric), 2) || ' (' || round(cast(stddev/nullif(cast(mean as float), 0) as numeric), 2) || '%)' AS stddev
-  , min
-  , max
+  --, unit
+  , format_metric(mean, unit) AS mean
+  , '±' || format_metric(stddev, unit) || ' (' || round(cast(stddev/nullif(cast(mean as float), 0) as numeric), 2) || '%)' AS stddev
+  , format_metric(min, unit) AS min
+  , format_metric(max, unit) AS max
 FROM execution_devs
 ORDER BY name, unit, mean

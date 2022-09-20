@@ -8,7 +8,7 @@ metrics AS (
       , m.name
       , m.unit
       , min(a.value) FILTER (WHERE a.name = 'scope') AS scope
-      , array_agg(row(a.name, a.value) ORDER BY a.name) AS attributes
+      , array_agg(a.name || '=' || a.value ORDER BY a.name) AS attributes
     FROM metrics m
     JOIN metric_attributes a ON a.metric_id = m.id
     GROUP BY m.id, m.name, m.unit
@@ -49,8 +49,6 @@ metrics AS (
       , count(*) AS num_measurements
       , count(*) FILTER (WHERE m.value NOT BETWEEN devs.low AND devs.high) AS num_outliers
       , count(*) FILTER (WHERE m.scope = 'driver' AND m.value NOT BETWEEN devs.low AND devs.high) AS num_driver_outliers
-      , array_agg(DISTINCT m.name ORDER BY m.name) FILTER (WHERE m.value NOT BETWEEN devs.low AND devs.high) AS names_outliers
-      , array_agg(DISTINCT m.name ORDER BY m.name) AS names_all
     FROM execution_devs devs
     JOIN executions ex ON ex.benchmark_run_id = devs.run_id
     JOIN execution_measurements em ON em.execution_id = ex.id
@@ -58,17 +56,13 @@ metrics AS (
     GROUP BY 1
 )
 SELECT
-    m.name
-  , m.attributes
-  , sum(s.num_executions) AS num_executions
-  , sum(s.num_invalid_executions) AS num_invalid_executions
-  , sum(s.num_measurements) AS num_measurements
-  , sum(s.num_outliers) AS num_outliers
-  , sum(s.num_driver_outliers) AS num_driver_outliers
-  -- TODO use this in Trino
-  -- , array_sort(array_distinct(flatten(array_agg(s.names_outliers)))) AS names_outliers
-  -- , array_sort(array_distinct(flatten(array_agg(s.names_all)))) AS names_ok
-  , array_union_agg(s.names_outliers) AS names_outliers
+    m.name AS "Metric"
+  , array_to_string(m.attributes, E'<br/>') AS "Attributes"
+  , sum(s.num_executions) AS "Num exec"
+  , sum(s.num_invalid_executions) AS "Invalid exec"
+  , sum(s.num_measurements) AS "Num meas"
+  , sum(s.num_outliers) AS "Num outliers"
+  , sum(s.num_driver_outliers) AS "Driver outliers"
 FROM metrics m
 LEFT JOIN execution_stats s ON s.metric_id = m.id
 GROUP BY 1, 2

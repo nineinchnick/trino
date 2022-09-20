@@ -109,12 +109,12 @@ attributes AS (
 SELECT
   /*  d.left_env_name
   , d.right_env_name
-  ,*/ d.metric
-  , d.unit
-  , s.bucket
-  , range
-  , coalesce(freq, 0) as freq
-  , repeat('■', (coalesce(freq, 0)::float / max(freq) over() * 30)::int) as bar
+  ,*/ d.metric AS "Metric"
+  , d.unit AS "Unit"
+  , s.bucket AS "Bucket"
+  , range AS "Diff % Range"
+  , coalesce(freq, 0) AS "Freq"
+  , repeat('■', (coalesce(freq, 0)::float / max(freq) over() * 30)::int) AS "Bar chart"
 FROM dimensions d
 CROSS JOIN generate_series(1, 10) s(bucket)
 LEFT JOIN histogram h ON (/*d.left_env_name, d.right_env_name,*/ d.metric, d.unit, s.bucket) = (/*h.left_env_name, h.right_env_name,*/ h.metric, h.unit, h.bucket)

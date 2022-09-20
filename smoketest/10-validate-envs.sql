@@ -10,7 +10,7 @@ environments AS (
     SELECT
         env.id
       , env.name
-      , array_agg(row(a.name, a.value) ORDER BY a.name) AS attributes
+      , array_agg(a.name || '=' || a.value ORDER BY a.name, a.value) AS attributes
     FROM environments env
     LEFT JOIN environment_attributes a ON a.environment_id = env.id AND a.name NOT IN ('startup_logs')
     GROUP BY 1, 2
@@ -22,7 +22,7 @@ environments AS (
       , m.unit
       , v.value
       , min(a.value) FILTER (WHERE a.name = 'scope') AS scope
-      , array_agg(row(a.name, a.value) ORDER BY a.name) AS attributes
+      , array_agg(a.name || '=' || a.value ORDER BY a.name, a.value) AS attributes
     FROM measurements v
     JOIN metrics m ON m.id = v.metric_id
     JOIN metric_attributes a ON m.id = a.metric_id
@@ -62,20 +62,20 @@ environments AS (
     GROUP BY 1
 )
 SELECT
-    env.name
-  , env.attributes
-  , runs.sequence_id
-  , array_agg(DISTINCT runs.status) AS statuses
-  , count(DISTINCT runs.id) AS num_runs
-  , sum(s.num_executions) AS num_executions
-  , sum(s.num_invalid_executions) AS num_invalid_executions
-  , sum(s.num_measurements) AS num_measurements
-  , sum(s.num_outliers) AS num_outliers
-  , sum(s.num_driver_outliers) AS num_driver_outliers
+    env.name AS "Environment"
+  , array_to_string(env.attributes, E'<br/>') AS "Attributes"
+  , runs.sequence_id AS "Sequence ID"
+  , array_agg(DISTINCT runs.status) AS "Statuses"
+  , count(DISTINCT runs.id) AS "Num runs"
+  , sum(s.num_executions) AS "Num exec"
+  , sum(s.num_invalid_executions) AS "Invalid exec"
+  , sum(s.num_measurements) AS "Num meas"
+  , sum(s.num_outliers) AS "Num outliers"
+  , sum(s.num_driver_outliers) AS "Driver outliers"
   -- TODO use this in Trino
   -- , array_sort(array_distinct(flatten(array_agg(s.names_outliers)))) AS names_outliers
   -- , array_sort(array_distinct(flatten(array_agg(s.names_all)))) AS names_ok
-  , array_union_agg(s.names_outliers) AS names_outliers
+  , array_union_agg(s.names_outliers) AS "Metrics with outliers"
 FROM environments env
 LEFT JOIN benchmark_runs runs ON runs.environment_id = env.id
 LEFT JOIN execution_stats s ON s.run_id = runs.id

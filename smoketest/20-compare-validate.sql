@@ -5,14 +5,14 @@ WITH
 attributes AS (
     SELECT
         benchmark_run_id
-      , array_agg(row(name, value) ORDER BY name, value) AS tuples
+      , array_agg(name || '=' || value ORDER BY name, value) AS tuples
     FROM benchmark_runs_attributes
     GROUP BY 1
 )
 , variables AS (
     SELECT
         benchmark_run_id
-      , array_agg(row(name, value) ORDER BY name, value) AS tuples
+      , array_agg(name || '=' || value ORDER BY name, value) AS tuples
     FROM benchmark_runs_variables
     GROUP BY 1
 )
@@ -43,21 +43,21 @@ attributes AS (
     GROUP BY runs.properties, runs.status
 )
 SELECT
-    env.name AS env_name
-  , count(*) FILTER (WHERE contains(runs.environment_ids, env.id)) AS num_runs
-  , count(*) FILTER (WHERE contains(runs.environment_ids, env.id) AND runs.status != 'ENDED') AS num_invalid_runs
-  , count(*) FILTER (WHERE contains(runs.environment_ids, env.id) AND runs.status = 'ENDED' AND cardinality(runs.environment_ids) > 1) AS num_comparable_runs
-  , count(*) FILTER (WHERE NOT contains(runs.environment_ids, env.id) AND runs.status = 'ENDED') AS num_missing_runs
-  , count(*) FILTER (WHERE contains(runs.environment_ids, env.id) AND runs.status = 'ENDED' AND cardinality(runs.environment_ids) = 1) AS num_extra_runs
-  , array_subtraction(
+    env.name AS "Environment"
+  , count(*) FILTER (WHERE contains(runs.environment_ids, env.id)) AS "Num runs"
+  , count(*) FILTER (WHERE contains(runs.environment_ids, env.id) AND runs.status != 'ENDED') AS "Invalid runs"
+  , count(*) FILTER (WHERE contains(runs.environment_ids, env.id) AND runs.status = 'ENDED' AND cardinality(runs.environment_ids) > 1) AS "Comparable runs"
+  , count(*) FILTER (WHERE NOT contains(runs.environment_ids, env.id) AND runs.status = 'ENDED') AS "Missing runs"
+  , count(*) FILTER (WHERE contains(runs.environment_ids, env.id) AND runs.status = 'ENDED' AND cardinality(runs.environment_ids) = 1) AS "Extra runs"
+  , array_to_string(array_sort(array_subtraction(
         array_union_agg(runs.environment_names) FILTER (WHERE contains(runs.environment_ids, env.id) AND runs.status = 'ENDED' AND cardinality(runs.environment_ids) > 1),
-        ARRAY[env.name]) AS comparable_envs
-  , array_subtraction(
+        ARRAY[env.name])), '<br/>') AS "Comparable environments"
+  , array_to_string(array_sort(array_subtraction(
         array_union_agg(runs.properties::text[]) FILTER (WHERE NOT contains(runs.environment_ids, env.id) AND runs.status = 'ENDED'),
-        array_union_agg(runs.properties::text[]) FILTER (WHERE contains(runs.environment_ids, env.id) AND runs.status = 'ENDED')) AS missing_run_properties
-  , array_subtraction(
+        array_union_agg(runs.properties::text[]) FILTER (WHERE contains(runs.environment_ids, env.id) AND runs.status = 'ENDED'))), '<br/>') AS "Missing run properties"
+  , array_to_string(array_sort(array_subtraction(
         array_union_agg(runs.properties::text[]) FILTER (WHERE contains(runs.environment_ids, env.id) AND runs.status = 'ENDED' AND cardinality(runs.environment_ids) = 1),
-        array_union_agg(runs.properties::text[]) FILTER (WHERE NOT contains(runs.environment_ids, env.id) AND runs.status = 'ENDED')) AS extra_run_properties
+        array_union_agg(runs.properties::text[]) FILTER (WHERE NOT contains(runs.environment_ids, env.id) AND runs.status = 'ENDED'))), '<br/>') AS "Extra run properties"
 FROM environments env
 CROSS JOIN unique_runs runs
 GROUP BY env.name

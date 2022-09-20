@@ -3,13 +3,14 @@
 set -euo pipefail
 shopt -s extglob
 
-for cmd in csv2md docker; do
+for cmd in csv2md docker pandoc psql; do
     if ! command -v "$cmd" >/dev/null; then
         echo >&2 "Missing the $cmd command"
         exit 1
     fi
 done
 
+# TODO document ALTER USER postgres SET IntervalStyle = 'postgres_verbose';
 # TODO replace psql with trino
 container_name=benchto-postgres
 db_name=benchto
@@ -21,6 +22,9 @@ fi
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 cd "$SCRIPT_DIR" || exit 1
+
+title="Benchmarks report"
+date=$(date)
 
 function query_report() {
     local query=$1
@@ -63,9 +67,8 @@ function query_tuples() {
 # create a report by executing sql files in order
 function report() {
     local target=report.md
-    local title="Benchmarks report"
     local queries=(??-*.sql)
-    local comments desc
+    local section comments desc
 
     mkdir -p "$(dirname "$target")"
     {
@@ -82,19 +85,22 @@ function report() {
             query_report "$(<"$file")"
             continue
         fi
-        title=$(echo "$comments" | head -1)
+        section=$(echo "$comments" | head -1)
         desc=$(echo "$comments" | tail -n +2)
-        title=${title#--}
+        section=${section#--}
         {
-            echo "# $title"
+            echo "## $section"
+            echo ""
             echo "$desc"
+            echo ""
             echo >&2 "Executing query from $file"
             query_report "$(<"$file")"
+            echo ""
             echo ""
         } >>"$target"
     done
 
-    echo "Generated on $(date)" >>"$target"
+    echo "Generated on $date" >>"$target"
 }
 
 function env_details() {
@@ -110,7 +116,7 @@ function env_details() {
         echo "## Properties"
         query_expanded "$(<env_details.sql)" -v "id=$id"
         echo ""
-        echo "Generated on $(date)"
+        echo "Generated on $date"
     } >"$target"
 }
 
@@ -151,7 +157,7 @@ function run_details() {
         echo "## Executions"
         query_report "$(<run_executions.sql)" -v "id=$id"
         echo ""
-        echo "Generated on $(date)"
+        echo "Generated on $date"
     } >"$target"
 }
 
@@ -175,5 +181,11 @@ SQL
 }
 
 report
+pandoc --standalone --toc \
+    --template=template.html \
+    --metadata title="$title" \
+    --metadata date="$date" \
+    -o report.html \
+    report.md
 dump_envs
 dump_runs
