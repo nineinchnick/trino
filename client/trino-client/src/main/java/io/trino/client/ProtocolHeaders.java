@@ -183,6 +183,11 @@ public final class ProtocolHeaders
         return prefix + "Clear-Transaction-Id";
     }
 
+    public String nextUri()
+    {
+        return prefix + "Next-Uri";
+    }
+
     public static ProtocolHeaders detectProtocol(Optional<String> alternateHeaderName, Set<String> headerNames)
             throws ProtocolDetectionException
     {

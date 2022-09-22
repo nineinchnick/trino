@@ -240,6 +240,7 @@ public class ExecutingStatementResource
         query.getSetCatalog().ifPresent(catalog -> response.header(protocolHeaders.responseSetCatalog(), catalog));
         query.getSetSchema().ifPresent(schema -> response.header(protocolHeaders.responseSetSchema(), schema));
         query.getSetPath().ifPresent(path -> response.header(protocolHeaders.responseSetPath(), path));
+        response.header(protocolHeaders.nextUri(), queryResults.getNextUri());
 
         // add set session properties
         query.getSetSessionProperties()
