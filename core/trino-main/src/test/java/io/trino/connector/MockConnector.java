@@ -776,9 +776,9 @@ public class MockConnector
         }
 
         @Override
-        public ConnectorMergeTableHandle beginMerge(ConnectorSession session, ConnectorTableHandle tableHandle, RetryMode retryMode)
+        public ConnectorMergeTableHandle beginMerge(ConnectorSession session, ConnectorTableHandle tableHandle, List<ColumnHandle> updatedColumns, RetryMode retryMode)
         {
-            return new MockConnectorMergeTableHandle((MockConnectorTableHandle) tableHandle);
+            return new MockConnectorMergeTableHandle((MockConnectorTableHandle) tableHandle, updatedColumns);
         }
 
         @Override

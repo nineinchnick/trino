@@ -842,9 +842,27 @@ public interface ConnectorMetadata
      * Do whatever is necessary to start an MERGE query, returning the {@link ConnectorMergeTableHandle}
      * instance that will be passed to the PageSink, and to the {@link #finishMerge} method.
      */
+    @Deprecated
     default ConnectorMergeTableHandle beginMerge(ConnectorSession session, ConnectorTableHandle tableHandle, RetryMode retryMode)
     {
         throw new TrinoException(NOT_SUPPORTED, MODIFYING_ROWS_MESSAGE);
+    }
+
+    /**
+     * Do whatever is necessary to start an MERGE query, returning the {@link ConnectorMergeTableHandle}
+     * instance that will be passed to the PageSink, and to the {@link #finishMerge} method.
+     *
+     * @param session The session in which to start the merge operation.
+     * @param tableHandle A ConnectorTableHandle for the table to be merged.
+     * @param updatedColumns A list of the ColumnHandles of columns that will be updated by
+     * all UPDATE cases of this MERGE operation, in table column order.
+     * @param retryMode The mode how to attempt retries in case of transient failures.
+     * @return a ConnectorTableHandle that will be passed to the PageSink, and to the
+     * {@link #finishMerge} method.
+     */
+    default ConnectorMergeTableHandle beginMerge(ConnectorSession session, ConnectorTableHandle tableHandle, List<ColumnHandle> updatedColumns, RetryMode retryMode)
+    {
+        return beginMerge(session, tableHandle, retryMode);
     }
 
     /**

@@ -709,18 +709,21 @@ public class TableWriterNode
         private final Optional<MergeHandle> mergeHandle;
         private final SchemaTableName schemaTableName;
         private final MergeParadigmAndTypes mergeParadigmAndTypes;
+        private final List<ColumnHandle> updatedColumnHandles;
 
         @JsonCreator
         public MergeTarget(
                 @JsonProperty("handle") TableHandle handle,
                 @JsonProperty("mergeHandle") Optional<MergeHandle> mergeHandle,
                 @JsonProperty("schemaTableName") SchemaTableName schemaTableName,
-                @JsonProperty("mergeParadigmAndTypes") MergeParadigmAndTypes mergeParadigmAndTypes)
+                @JsonProperty("mergeParadigmAndTypes") MergeParadigmAndTypes mergeParadigmAndTypes,
+                @JsonProperty("updatedColumnHandles") List<ColumnHandle> updatedColumnHandles)
         {
             this.handle = requireNonNull(handle, "handle is null");
             this.mergeHandle = requireNonNull(mergeHandle, "mergeHandle is null");
             this.schemaTableName = requireNonNull(schemaTableName, "schemaTableName is null");
-            this.mergeParadigmAndTypes = requireNonNull(mergeParadigmAndTypes, "mergeElements is null");
+            this.mergeParadigmAndTypes = requireNonNull(mergeParadigmAndTypes, "mergeParadigmAndTypes is null");
+            this.updatedColumnHandles = requireNonNull(updatedColumnHandles, "updatedColumnHandles is null");
         }
 
         @JsonProperty
@@ -745,6 +748,12 @@ public class TableWriterNode
         public MergeParadigmAndTypes getMergeParadigmAndTypes()
         {
             return mergeParadigmAndTypes;
+        }
+
+        @JsonProperty
+        public List<ColumnHandle> getUpdatedColumnHandles()
+        {
+            return updatedColumnHandles;
         }
 
         @Override

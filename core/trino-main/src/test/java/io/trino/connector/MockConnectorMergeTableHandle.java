@@ -15,7 +15,10 @@ package io.trino.connector;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ConnectorMergeTableHandle;
+
+import java.util.List;
 
 import static java.util.Objects.requireNonNull;
 
@@ -23,11 +26,15 @@ public class MockConnectorMergeTableHandle
         implements ConnectorMergeTableHandle
 {
     private final MockConnectorTableHandle tableHandle;
+    private final List<ColumnHandle> updatedColumns;
 
     @JsonCreator
-    public MockConnectorMergeTableHandle(@JsonProperty("tableHandle") MockConnectorTableHandle tableHandle)
+    public MockConnectorMergeTableHandle(
+            @JsonProperty("tableHandle") MockConnectorTableHandle tableHandle,
+            @JsonProperty("updatedColumns") List<ColumnHandle> updatedColumns)
     {
         this.tableHandle = requireNonNull(tableHandle, "tableHandle is null");
+        this.updatedColumns = requireNonNull(updatedColumns, "updatedColumns is null");
     }
 
     @JsonProperty
@@ -35,5 +42,11 @@ public class MockConnectorMergeTableHandle
     public MockConnectorTableHandle getTableHandle()
     {
         return tableHandle;
+    }
+
+    @JsonProperty
+    public List<ColumnHandle> getUpdatedColumns()
+    {
+        return updatedColumns;
     }
 }
