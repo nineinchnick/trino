@@ -26,6 +26,7 @@ public class TestKuduPlugin
     @Test
     public void testCreateConnector()
     {
+        // TODO remove this comment, it's only to test how CI detects changes
         Plugin plugin = new KuduPlugin();
         ConnectorFactory factory = getOnlyElement(plugin.getConnectorFactories());
         factory.create("test", ImmutableMap.of("kudu.client.master-addresses", "localhost:7051"), new TestingConnectorContext()).shutdown();
