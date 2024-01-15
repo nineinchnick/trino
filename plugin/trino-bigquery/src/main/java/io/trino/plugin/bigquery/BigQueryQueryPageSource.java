@@ -32,12 +32,14 @@ import io.trino.spi.type.ArrayType;
 import io.trino.spi.type.DecimalType;
 import io.trino.spi.type.Decimals;
 import io.trino.spi.type.Int128;
+import io.trino.spi.type.LongTimestampWithTimeZone;
 import io.trino.spi.type.RowType;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.VarbinaryType;
 import io.trino.spi.type.VarcharType;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -55,11 +57,19 @@ import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.DateType.DATE;
 import static io.trino.spi.type.IntegerType.INTEGER;
 import static io.trino.spi.type.TimeType.TIME_MICROS;
+import static io.trino.spi.type.TimeZoneKey.UTC_KEY;
 import static io.trino.spi.type.TimestampType.TIMESTAMP_MICROS;
+import static io.trino.spi.type.TimestampWithTimeZoneType.TIMESTAMP_TZ_MICROS;
+import static io.trino.spi.type.Timestamps.MICROSECONDS_PER_MILLISECOND;
+import static io.trino.spi.type.Timestamps.MICROSECONDS_PER_SECOND;
 import static io.trino.spi.type.Timestamps.NANOSECONDS_PER_DAY;
 import static io.trino.spi.type.Timestamps.PICOSECONDS_PER_DAY;
+import static io.trino.spi.type.Timestamps.PICOSECONDS_PER_MICROSECOND;
+import static io.trino.spi.type.Timestamps.PICOSECONDS_PER_MILLISECOND;
 import static io.trino.spi.type.Timestamps.PICOSECONDS_PER_NANOSECOND;
 import static io.trino.spi.type.Timestamps.round;
+import static java.lang.Integer.parseInt;
+import static java.lang.Long.parseLong;
 import static java.lang.String.format;
 import static java.time.temporal.ChronoField.NANO_OF_SECOND;
 import static java.util.Objects.requireNonNull;
@@ -161,7 +171,7 @@ public class BigQueryQueryPageSource
 
     private void appendTo(Type type, FieldValue value, BlockBuilder output)
     {
-        // TODO (https://github.com/trinodb/trino/issues/12346) Add support for bignumeric and timestamp with time zone types
+        // TODO (https://github.com/trinodb/trino/issues/12346) Add support for bignumeric
         if (value == null || value.isNull()) {
             output.appendNull();
             return;
@@ -211,6 +221,25 @@ public class BigQueryQueryPageSource
             }
             else if (javaType == Slice.class) {
                 writeSlice(output, type, value);
+            }
+            else if (javaType == LongTimestampWithTimeZone.class) {
+                BigDecimal timestamp = new BigDecimal(value.getStringValue());
+                long epochMillis = timestamp.longValue() * 1000;
+                int microOfSecond = timestamp.remainder(BigDecimal.ONE).movePointRight(6).abs().intValueExact();
+                if (epochMillis > 0) {
+                    epochMillis += microOfSecond / MICROSECONDS_PER_MILLISECOND;
+                    microOfSecond = microOfSecond % MICROSECONDS_PER_MILLISECOND;
+                }
+                else {
+                    epochMillis -= microOfSecond / MICROSECONDS_PER_MILLISECOND;
+                    microOfSecond = microOfSecond % MICROSECONDS_PER_MILLISECOND;
+                    if (microOfSecond > 0) {
+                        epochMillis -= 1;
+                        microOfSecond = MICROSECONDS_PER_MILLISECOND - microOfSecond;
+                    }
+                }
+                int picosOfMilli = microOfSecond * PICOSECONDS_PER_MICROSECOND;
+                type.writeObject(output, LongTimestampWithTimeZone.fromEpochMillisAndFraction(epochMillis, picosOfMilli, UTC_KEY));
             }
             else if (type instanceof ArrayType arrayType) {
                 ((ArrayBlockBuilder) output).buildEntry(elementBuilder -> {
