@@ -73,6 +73,7 @@ import static io.trino.sql.ir.IrExpressions.not;
 import static io.trino.type.InternalTypeManager.TESTING_TYPE_MANAGER;
 import static java.lang.String.format;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class TestPostgreSqlClient
 {
@@ -128,6 +129,7 @@ public class TestPostgreSqlClient
     @Test
     public void testImplementCount()
     {
+        fail("TODO remove this, test annotations");
         Variable bigintVariable = new Variable("v_bigint", BIGINT);
         Variable doubleVariable = new Variable("v_double", BIGINT);
         Optional<ConnectorExpression> filter = Optional.of(new Variable("a_filter", BOOLEAN));
