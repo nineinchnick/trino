@@ -49,3 +49,24 @@ runs:
       path: |
         **/*.hprof
       retention-days: 14
+  - name: Process unit and integration test reports
+    # TODO this is head of the surefire-report-update-check branch,
+    # change to main after merging https://github.com/trinodb/github-actions/pull/34
+    uses: trinodb/github-actions/action-surefire-report@7c331cd9806f14bd691508e7592d8cc214f1a795
+    if: format('{0}', inputs.has-failed-tests) == 'true'
+    with:
+      # this workflow should never fail, as it is not a quality gateway
+      fail_if_no_tests: false
+      # don't create or update checks, only annotate current job
+      skip_publishing: true
+  - name: Process Product Test reports
+    # TODO this is head of the jwas/generate-annotations branch,
+    # change to main after merging https://github.com/starburstdata/action-testng-report
+    uses: starburstdata/action-testng-report@ae909e1f8f90ada2aceac494e14af6a6894ee513
+    if: format('{0}', inputs.has-failed-tests) == 'true'
+    with:
+      # this workflow should never fail, as it is not a quality gateway
+      fail_if_empty: false
+      github_token: ${{ github.token }}
+      # don't create or update checks, only annotate current job
+      skip_publishing: true
