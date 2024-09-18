@@ -55,6 +55,8 @@ jobs:
         if: env.S3_BUCKET != '' && env.AWS_ACCESS_KEY_ID != '' && env.AWS_SECRET_ACCESS_KEY != ''
         shell: bash --noprofile --norc -euo pipefail {0}
         run: |
+          set -x
+          pwd
           # 1. Don't prefix attributes, because +@ (the default prefix) is not a valid character in nested row field names in the Hive connector for JSON files.
           # 2. When converting to JSON, make sure 'testcase' is always an array: https://mikefarah.gitbook.io/yq/usage/xml#parse-xml-force-as-an-array
           # 3. Remove system-err and system-out, because they cannot be easily parsed and add significant bloat, making storing and processing the data much more costly.
@@ -82,6 +84,7 @@ jobs:
             -exec yq "${yq_opts[@]}" {} \; \
                 | jq -c > testng.ndjson
 
+          ls -la
           for filename in *.ndjson; do
             if [ ! -s "$filename" ]; then
               continue;
