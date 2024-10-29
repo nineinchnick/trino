@@ -13,6 +13,8 @@
  */
 package io.trino.plugin.redshift;
 
+import io.airlift.log.Logger;
+import io.airlift.log.Logging;
 import io.trino.testing.AbstractTestQueryFramework;
 import io.trino.testing.QueryRunner;
 import org.junit.jupiter.api.Test;
@@ -27,6 +29,8 @@ import static io.trino.tpch.TpchTable.CUSTOMER;
 public class TestRedshiftUnload
         extends AbstractTestQueryFramework
 {
+    private static final Logger log = Logger.get(TestRedshiftUnload.class);
+
     private static final String IAM_ROLE = requiredNonEmptySystemProperty("test.redshift.iam.role");
     private static final String REGION = requiredNonEmptySystemProperty("test.redshift.aws.region");
     private static final String AWS_ACCESS_KEY = requiredNonEmptySystemProperty("test.redshift.aws.access-key");
@@ -40,7 +44,7 @@ public class TestRedshiftUnload
                 .setInitialTables(List.of(CUSTOMER))
                 .setConnectorProperties(Map.of(
                         "redshift.unload-location", "s3://starburstdata-engineering-redshift-test/unload",
-                        "redshift.unload-options", "REGION AS '%s'".formatted(REGION),
+                        "redshift.unload-options", "REGION AS '%s' MAXFILESIZE AS 5 MB".formatted(REGION),
                         "redshift.iam-role", IAM_ROLE,
                         "s3.region", REGION,
                         "s3.endpoint", "https://s3.%s.amazonaws.com".formatted(REGION),
@@ -51,9 +55,18 @@ public class TestRedshiftUnload
     }
 
     @Test
-    public void testCustomerTable()
+    public void testSelect()
     {
         assertQuery("SELECT custkey, name FROM " + TEST_SCHEMA + ".customer WHERE custkey IN (SELECT custkey FROM " + TEST_SCHEMA + ".customer ORDER BY name LIMIT 2) ORDER BY name",
                 "VALUES (1, 'Customer#000000001'), (2, 'Customer#000000002')");
+    }
+
+    public static void main(String[] args)
+            throws Exception
+    {
+        Logging.initialize();
+
+        log.info("======== SERVER STARTED ========");
+        log.info("\n====\n%s\n====", new TestRedshiftUnload().createQueryRunner().getCoordinator().getBaseUrl());
     }
 }
