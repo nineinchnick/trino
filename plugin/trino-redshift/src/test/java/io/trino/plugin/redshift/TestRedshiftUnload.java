@@ -17,12 +17,12 @@ import io.airlift.log.Logger;
 import io.airlift.log.Logging;
 import io.trino.testing.AbstractTestQueryFramework;
 import io.trino.testing.QueryRunner;
+import org.intellij.lang.annotations.Language;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
 
-import static io.trino.plugin.redshift.TestingRedshiftServer.TEST_SCHEMA;
 import static io.trino.testing.TestingProperties.requiredNonEmptySystemProperty;
 import static io.trino.tpch.TpchTable.CUSTOMER;
 
@@ -57,7 +57,18 @@ public class TestRedshiftUnload
     @Test
     public void testSelect()
     {
-        assertQuery("SELECT custkey, name FROM " + TEST_SCHEMA + ".customer WHERE custkey IN (SELECT custkey FROM " + TEST_SCHEMA + ".customer ORDER BY name LIMIT 2) ORDER BY name",
+        @Language("SQL")
+        String query = """
+                       SELECT custkey, name
+                       FROM " + TEST_SCHEMA + ".customer
+                       WHERE custkey IN (
+                         SELECT custkey
+                         FROM " + TEST_SCHEMA + ".customer
+                         ORDER BY name
+                         LIMIT 2
+                       )
+                       ORDER BY name""";
+        assertQuery(query,
                 "VALUES (1, 'Customer#000000001'), (2, 'Customer#000000002')");
     }
 

@@ -96,7 +96,10 @@ public class RedshiftUnloadSplitManager
         }
         JdbcTableHandle jdbcTableHandle = dynamicFilteringEnabled(session) ? ((JdbcTableHandle) table).intersectedWithConstraint(dynamicFilter.getCurrentPredicate()) : (JdbcTableHandle) table;
         List<JdbcColumnHandle> columns = jdbcTableHandle.getColumns()
-                .orElseGet(() -> jdbcClient.getColumns(session, jdbcTableHandle));
+                .orElseGet(() -> jdbcClient.getColumns(
+                        session,
+                        jdbcTableHandle.getRequiredNamedRelation().getSchemaTableName(),
+                        jdbcTableHandle.getRequiredNamedRelation().getRemoteTableName()));
         Connection connection;
         PreparedStatement statement;
         try {
@@ -113,8 +116,8 @@ public class RedshiftUnloadSplitManager
             throws SQLException
     {
         PreparedQuery preparedQuery = jdbcClient.prepareQuery(session, table, Optional.empty(), columns, ImmutableMap.of());
-        // TODO specify region through a separate config option or unloadOptions?
         String modifiedQuery = queryModifier.apply(session, preparedQuery.query());
+
         String sql = "UNLOAD ('%s') TO '%s' %s FORMAT PARQUET %s".formatted(
                 formatStringLiteral(modifiedQuery),
                 unloadLocation + session.getQueryId() + "-" + UUID.randomUUID() + "/",
