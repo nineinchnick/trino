@@ -42,6 +42,7 @@ import io.trino.spi.type.VarbinaryType;
 import io.trino.spi.type.VarcharType;
 import net.datafaker.Faker;
 
+import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.net.Inet4Address;
 import java.net.UnknownHostException;
@@ -446,7 +447,7 @@ class FakerPageSource
 
     private long generateLongDefaults(Range range, long factor, long min, long max)
     {
-        return faker.number().numberBetween(
+        return numberBetween(
                 roundDiv((long) range.getLowValue().orElse(min), factor) + (!range.isLowUnbounded() && !range.isLowInclusive() ? 1 : 0),
                 // TODO does the inclusion only apply to positive numbers?
                 roundDiv((long) range.getHighValue().orElse(max), factor) + (!range.isHighUnbounded() && range.isHighInclusive() ? 1 : 0)) * factor;
@@ -454,21 +455,21 @@ class FakerPageSource
 
     private int generateInt(Range range)
     {
-        return (int) faker.number().numberBetween(
+        return (int) numberBetween(
                 (long) range.getLowValue().orElse((long) Integer.MIN_VALUE) + (!range.isLowUnbounded() && !range.isLowInclusive() ? 1 : 0),
                 (long) range.getHighValue().orElse((long) Integer.MAX_VALUE) + (!range.isHighUnbounded() && range.isHighInclusive() ? 1 : 0));
     }
 
     private short generateShort(Range range)
     {
-        return (short) faker.number().numberBetween(
+        return (short) numberBetween(
                 (long) range.getLowValue().orElse((long) Short.MIN_VALUE) + (!range.isLowUnbounded() && !range.isLowInclusive() ? 1 : 0),
                 (long) range.getHighValue().orElse((long) Short.MAX_VALUE) + (!range.isHighUnbounded() && range.isHighInclusive() ? 1 : 0));
     }
 
     private byte generateTiny(Range range)
     {
-        return (byte) faker.number().numberBetween(
+        return (byte) numberBetween(
                 (long) range.getLowValue().orElse((long) Byte.MIN_VALUE) + (!range.isLowUnbounded() && !range.isLowInclusive() ? 1 : 0),
                 (long) range.getHighValue().orElse((long) Byte.MAX_VALUE) + (!range.isHighUnbounded() && range.isHighInclusive() ? 1 : 0));
     }
@@ -561,7 +562,7 @@ class FakerPageSource
         LongTimestamp finalLow = low;
         LongTimestamp finalHigh = high;
         return (blockBuilder) -> {
-            long epochMicros = faker.number().numberBetween(finalLow.getEpochMicros(), finalHigh.getEpochMicros());
+            long epochMicros = numberBetween(finalLow.getEpochMicros(), finalHigh.getEpochMicros());
             if (tzType.getPrecision() <= 6) {
                 epochMicros *= factor;
                 tzType.writeObject(blockBuilder, new LongTimestamp(epochMicros * factor, 0));
@@ -569,17 +570,17 @@ class FakerPageSource
             }
             int picosOfMicro;
             if (epochMicros == finalLow.getEpochMicros()) {
-                picosOfMicro = faker.number().numberBetween(
+                picosOfMicro = numberBetween(
                         finalLow.getPicosOfMicro(),
                         finalLow.getEpochMicros() == finalHigh.getEpochMicros() ?
                                 finalHigh.getPicosOfMicro()
                                 : (int) POWERS_OF_TEN[tzType.getPrecision() - 6] - 1);
             }
             else if (epochMicros == finalHigh.getEpochMicros()) {
-                picosOfMicro = faker.number().numberBetween(0, finalHigh.getPicosOfMicro());
+                picosOfMicro = numberBetween(0, finalHigh.getPicosOfMicro());
             }
             else {
-                picosOfMicro = faker.number().numberBetween(0, (int) POWERS_OF_TEN[tzType.getPrecision() - 6] - 1);
+                picosOfMicro = numberBetween(0, (int) POWERS_OF_TEN[tzType.getPrecision() - 6] - 1);
             }
             tzType.writeObject(blockBuilder, new LongTimestamp(epochMicros, picosOfMicro * factor));
         };
@@ -595,7 +596,7 @@ class FakerPageSource
                             .orElse(TimeZoneKey.UTC_KEY));
             long factor = POWERS_OF_TEN[3 - tzType.getPrecision()];
             return (blockBuilder) -> {
-                long millis = faker.number().numberBetween(
+                long millis = numberBetween(
                         roundDiv(unpackMillisUtc((long) range.getLowValue().orElse(Long.MIN_VALUE)), factor) + (!range.isLowUnbounded() && !range.isLowInclusive() ? 1 : 0),
                         roundDiv(unpackMillisUtc((long) range.getHighValue().orElse(Long.MAX_VALUE)), factor) + (!range.isHighUnbounded() && range.isHighInclusive() ? 1 : 0)) * factor;
                 tzType.writeLong(blockBuilder, packDateTimeWithZone(millis, defaultTZ));
@@ -627,20 +628,20 @@ class FakerPageSource
         LongTimestampWithTimeZone finalLow = low;
         LongTimestampWithTimeZone finalHigh = high;
         return (blockBuilder) -> {
-            long millis = faker.number().numberBetween(finalLow.getEpochMillis(), finalHigh.getEpochMillis());
+            long millis = numberBetween(finalLow.getEpochMillis(), finalHigh.getEpochMillis());
             int picosOfMilli;
             if (millis == finalLow.getEpochMillis()) {
-                picosOfMilli = faker.number().numberBetween(
+                picosOfMilli = numberBetween(
                         finalLow.getPicosOfMilli(),
                         finalLow.getEpochMillis() == finalHigh.getEpochMillis() ?
                                 finalHigh.getPicosOfMilli()
                                 : (int) POWERS_OF_TEN[tzType.getPrecision() - 3] - 1);
             }
             else if (millis == finalHigh.getEpochMillis()) {
-                picosOfMilli = faker.number().numberBetween(0, finalHigh.getPicosOfMilli());
+                picosOfMilli = numberBetween(0, finalHigh.getPicosOfMilli());
             }
             else {
-                picosOfMilli = faker.number().numberBetween(0, (int) POWERS_OF_TEN[tzType.getPrecision() - 3] - 1);
+                picosOfMilli = numberBetween(0, (int) POWERS_OF_TEN[tzType.getPrecision() - 3] - 1);
             }
             tzType.writeObject(blockBuilder, fromEpochMillisAndFraction(millis, picosOfMilli * factor, defaultTZ));
         };
@@ -658,7 +659,7 @@ class FakerPageSource
             long low = roundDiv(range.getLowValue().map(v -> unpackTimeNanos((long) v)).orElse(0L), factor) + (!range.isLowUnbounded() && !range.isLowInclusive() ? 1 : 0);
             long high = roundDiv(range.getHighValue().map(v -> unpackTimeNanos((long) v)).orElse(NANOSECONDS_PER_DAY), factor) + (!range.isHighUnbounded() && range.isHighInclusive() ? 1 : 0);
             return (blockBuilder) -> {
-                long nanos = faker.number().numberBetween(low, high) * factor;
+                long nanos = numberBetween(low, high) * factor;
                 timeType.writeLong(blockBuilder, packTimeWithTimeZone(nanos, offsetMinutes));
             };
         }
@@ -678,9 +679,50 @@ class FakerPageSource
         long longLow = roundDiv(low.getPicoseconds(), factor) + (!range.isLowUnbounded() && !range.isLowInclusive() ? 1 : 0);
         long longHigh = roundDiv(high.getPicoseconds(), factor) + (!range.isHighUnbounded() && range.isHighInclusive() ? 1 : 0);
         return (blockBuilder) -> {
-            long picoseconds = faker.number().numberBetween(longLow, longHigh) * factor;
+            long picoseconds = numberBetween(longLow, longHigh) * factor;
             timeType.writeObject(blockBuilder, new LongTimeWithTimeZone(picoseconds, offsetMinutes));
         };
+    }
+
+    private int numberBetween(final int min, final int max)
+    {
+        if (min == max) {
+            return min;
+        }
+        final int realMin = Math.min(min, max);
+        final int realMax = Math.max(min, max);
+        final int amplitude = realMax - realMin;
+        if (amplitude >= 0) {
+            return random.nextInt(amplitude) + realMin;
+        }
+        return (int) numberBetween(realMin, (long) realMax);
+    }
+
+    private long numberBetween(long min, long max)
+    {
+        if (min == max) {
+            return min;
+        }
+        final long realMin = Math.min(min, max);
+        final long realMax = Math.max(min, max);
+        final long amplitude = realMax - realMin;
+        if (amplitude >= 0) {
+            return random.nextLong(amplitude) + realMin;
+        }
+        return decimalBetween(realMin, realMax).longValue();
+    }
+
+    private BigDecimal decimalBetween(long min, long max)
+    {
+        if (min == max) {
+            return BigDecimal.valueOf(min);
+        }
+
+        final BigDecimal trueMin = BigDecimal.valueOf(min);
+        final BigDecimal trueMax = BigDecimal.valueOf(max);
+        final BigDecimal randomValue = BigDecimal.valueOf(random.nextDouble());
+
+        return trueMin.add(trueMax.subtract(trueMin).multiply(randomValue));
     }
 
     private Generator generateIpV4(Range range)
