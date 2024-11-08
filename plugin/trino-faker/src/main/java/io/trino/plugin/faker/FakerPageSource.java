@@ -730,7 +730,8 @@ class FakerPageSource
         return decimalBetween(realMin, realMax).longValue();
     }
 
-    private BigDecimal decimalBetween(long min, long max) {
+    private BigDecimal decimalBetween(long min, long max)
+    {
         if (min == max) {
             return BigDecimal.valueOf(min);
         }
