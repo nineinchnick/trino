@@ -18,6 +18,8 @@ import com.google.common.collect.ImmutableList;
 import com.google.errorprone.annotations.concurrent.GuardedBy;
 import io.airlift.slice.Slice;
 import io.trino.spi.TrinoException;
+import io.trino.spi.block.Block;
+import io.trino.spi.catalog.CatalogName;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ColumnMetadata;
 import io.trino.spi.connector.ConnectorMetadata;
@@ -28,15 +30,16 @@ import io.trino.spi.connector.ConnectorTableHandle;
 import io.trino.spi.connector.ConnectorTableLayout;
 import io.trino.spi.connector.ConnectorTableMetadata;
 import io.trino.spi.connector.ConnectorTableVersion;
+import io.trino.spi.connector.ConnectorViewDefinition;
 import io.trino.spi.connector.Constraint;
 import io.trino.spi.connector.ConstraintApplicationResult;
 import io.trino.spi.connector.LimitApplicationResult;
+import io.trino.spi.connector.RelationColumnsMetadata;
 import io.trino.spi.connector.RetryMode;
 import io.trino.spi.connector.SaveMode;
 import io.trino.spi.connector.SchemaNotFoundException;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.connector.SchemaTablePrefix;
-import io.trino.spi.connector.TableColumnsMetadata;
 import io.trino.spi.function.BoundSignature;
 import io.trino.spi.function.FunctionDependencyDeclaration;
 import io.trino.spi.function.FunctionId;
@@ -45,9 +48,14 @@ import io.trino.spi.function.SchemaFunctionName;
 import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.security.TrinoPrincipal;
+import io.trino.spi.statistics.ColumnStatisticMetadata;
+import io.trino.spi.statistics.ColumnStatisticType;
 import io.trino.spi.statistics.ComputedStatistics;
+import io.trino.spi.statistics.TableStatisticType;
+import io.trino.spi.statistics.TableStatisticsMetadata;
 import io.trino.spi.type.BigintType;
 import io.trino.spi.type.CharType;
+import io.trino.spi.type.Type;
 import io.trino.spi.type.VarbinaryType;
 import io.trino.spi.type.VarcharType;
 import jakarta.inject.Inject;
@@ -59,12 +67,16 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.base.Verify.verify;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
+import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static io.trino.spi.StandardErrorCode.INVALID_COLUMN_PROPERTY;
 import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static io.trino.spi.StandardErrorCode.SCHEMA_ALREADY_EXISTS;
@@ -73,30 +85,34 @@ import static io.trino.spi.StandardErrorCode.TABLE_ALREADY_EXISTS;
 import static io.trino.spi.connector.RetryMode.NO_RETRIES;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
+import static java.util.stream.Collectors.joining;
 
 public class FakerMetadata
         implements ConnectorMetadata
 {
     public static final String SCHEMA_NAME = "default";
     public static final String ROW_ID_COLUMN_NAME = "$row_id";
+    private static final String VIEW_SUFFIX = "_view";
 
     @GuardedBy("this")
     private final List<SchemaInfo> schemas = new ArrayList<>();
     private final double nullProbability;
     private final long defaultLimit;
+    private final FakerFunctionProvider functionsProvider;
+    private final CatalogName catalogName;
 
     @GuardedBy("this")
     private final Map<SchemaTableName, TableInfo> tables = new HashMap<>();
-
-    private final FakerFunctionProvider functionsProvider;
+    private final Map<SchemaTableName, String> views = new HashMap<>();
 
     @Inject
-    public FakerMetadata(FakerConfig config, FakerFunctionProvider functionProvider)
+    public FakerMetadata(FakerConfig config, FakerFunctionProvider functionProvider, CatalogName catalogName)
     {
         this.schemas.add(new SchemaInfo(SCHEMA_NAME, Map.of()));
         this.nullProbability = config.getNullProbability();
         this.defaultLimit = config.getDefaultLimit();
         this.functionsProvider = requireNonNull(functionProvider, "functionProvider is null");
+        this.catalogName = requireNonNull(catalogName, "catalogName is null");
     }
 
     @Override
@@ -165,9 +181,48 @@ public class FakerMetadata
     }
 
     @Override
+    public synchronized Optional<ConnectorViewDefinition> getView(ConnectorSession session, SchemaTableName viewName)
+    {
+        SchemaTableName tableName = SchemaTableName.schemaTableName(viewName.getSchemaName(), stripSuffix(viewName.getTableName(), VIEW_SUFFIX));
+        TableInfo tableInfo = tables.get(tableName);
+        if (tableInfo == null || !views.containsKey(viewName)) {
+            return Optional.empty();
+        }
+        return Optional.of(new ConnectorViewDefinition(
+                views.get(viewName),
+                Optional.empty(),
+                Optional.empty(),
+                tableInfo.columns().stream()
+                        .map(column -> new ConnectorViewDefinition.ViewColumn(
+                                column.name(),
+                                column.type().getTypeId(),
+                                Optional.empty()))
+                        .collect(toImmutableList()),
+                Optional.empty(),
+                Optional.empty(),
+                true,
+                List.of()));
+    }
+
+    private static String stripSuffix(String key, String suffix)
+    {
+        return key.endsWith(suffix)
+                ? key.substring(0, key.length() - suffix.length())
+                : key;
+    }
+
+    @Override
     public synchronized List<SchemaTableName> listTables(ConnectorSession session, Optional<String> schemaName)
     {
-        return tables.keySet().stream()
+        return Stream.concat(tables.keySet().stream(), views.keySet().stream())
+                .filter(table -> schemaName.map(table.getSchemaName()::contentEquals).orElse(true))
+                .collect(toImmutableList());
+    }
+
+    @Override
+    public synchronized List<SchemaTableName> listViews(ConnectorSession session, Optional<String> schemaName)
+    {
+        return views.keySet().stream()
                 .filter(table -> schemaName.map(table.getSchemaName()::contentEquals).orElse(true))
                 .collect(toImmutableList());
     }
@@ -196,13 +251,33 @@ public class FakerMetadata
     }
 
     @Override
-    public synchronized Iterator<TableColumnsMetadata> streamTableColumns(ConnectorSession session, SchemaTablePrefix prefix)
+    public synchronized Iterator<RelationColumnsMetadata> streamRelationColumns(
+            ConnectorSession session,
+            Optional<String> schemaName,
+            UnaryOperator<Set<SchemaTableName>> relationFilter)
     {
-        return tables.entrySet().stream()
+        Map<SchemaTableName, RelationColumnsMetadata> relationColumns = new HashMap<>();
+
+        SchemaTablePrefix prefix = schemaName.map(SchemaTablePrefix::new)
+                .orElseGet(SchemaTablePrefix::new);
+        tables.entrySet().stream()
                 .filter(entry -> prefix.matches(entry.getKey()))
-                .map(entry -> TableColumnsMetadata.forTable(
-                        entry.getKey(),
-                        entry.getValue().columns().stream().map(ColumnInfo::metadata).collect(toImmutableList())))
+                .forEach(entry -> {
+                    SchemaTableName name = entry.getKey();
+                    RelationColumnsMetadata columns = RelationColumnsMetadata.forTable(
+                            name,
+                            entry.getValue().columns().stream()
+                                    .map(ColumnInfo::metadata)
+                                    .collect(toImmutableList()));
+                    relationColumns.put(name, columns);
+                });
+
+        for (Map.Entry<SchemaTableName, ConnectorViewDefinition> entry : getViews(session, schemaName).entrySet()) {
+            relationColumns.put(entry.getKey(), RelationColumnsMetadata.forView(entry.getKey(), entry.getValue().getColumns()));
+        }
+
+        return relationFilter.apply(relationColumns.keySet()).stream()
+                .map(relationColumns::get)
                 .iterator();
     }
 
@@ -296,7 +371,7 @@ public class FakerMetadata
         double schemaNullProbability = (double) schema.properties().getOrDefault(SchemaInfo.NULL_PROBABILITY_PROPERTY, nullProbability);
         double tableNullProbability = (double) tableMetadata.getProperties().getOrDefault(TableInfo.NULL_PROBABILITY_PROPERTY, schemaNullProbability);
 
-        ImmutableList.Builder<ColumnInfo> columns = ImmutableList.builder();
+        ImmutableList.Builder<ColumnInfo> columnsBuilder = ImmutableList.builder();
         int columnId = 0;
         for (; columnId < tableMetadata.getColumns().size(); columnId++) {
             ColumnMetadata column = tableMetadata.getColumns().get(columnId);
@@ -308,7 +383,7 @@ public class FakerMetadata
             if (generator != null && !isCharacterColumn(column)) {
                 throw new TrinoException(INVALID_COLUMN_PROPERTY, "The `generator` property can only be set for CHAR, VARCHAR or VARBINARY columns");
             }
-            columns.add(new ColumnInfo(
+            columnsBuilder.add(new ColumnInfo(
                     new FakerColumnHandle(
                             columnId,
                             column.getName(),
@@ -318,7 +393,7 @@ public class FakerMetadata
                     column));
         }
 
-        columns.add(new ColumnInfo(
+        columnsBuilder.add(new ColumnInfo(
                 new FakerColumnHandle(
                         columnId,
                         ROW_ID_COLUMN_NAME,
@@ -332,12 +407,20 @@ public class FakerMetadata
                         .setNullable(false)
                         .build()));
 
+        List<ColumnInfo> columns = columnsBuilder.build();
         tables.put(tableName, new TableInfo(
-                columns.build(),
+                columns,
                 tableMetadata.getProperties(),
                 tableMetadata.getComment()));
 
-        return new FakerOutputTableHandle(tableName);
+        return new FakerOutputTableHandle(
+                tableName,
+                columns.stream()
+                        .map(ColumnInfo::name)
+                        .collect(toImmutableList()),
+                columns.stream()
+                        .map(ColumnInfo::type)
+                        .collect(toImmutableList()));
     }
 
     private boolean isCharacterColumn(ColumnMetadata column)
@@ -360,7 +443,11 @@ public class FakerMetadata
     }
 
     @Override
-    public synchronized Optional<ConnectorOutputMetadata> finishCreateTable(ConnectorSession session, ConnectorOutputTableHandle tableHandle, Collection<Slice> fragments, Collection<ComputedStatistics> computedStatistics)
+    public synchronized Optional<ConnectorOutputMetadata> finishCreateTable(
+            ConnectorSession session,
+            ConnectorOutputTableHandle tableHandle,
+            Collection<Slice> fragments,
+            Collection<ComputedStatistics> computedStatistics)
     {
         requireNonNull(tableHandle, "tableHandle is null");
         FakerOutputTableHandle fakerOutputHandle = (FakerOutputTableHandle) tableHandle;
@@ -370,10 +457,73 @@ public class FakerMetadata
         TableInfo info = tables.get(tableName);
         requireNonNull(info, "info is null");
 
-        // TODO ensure fragments is empty?
+        Map<String, Object> minimums = new HashMap<>();
+        Map<String, Object> maximums = new HashMap<>();
+        if (!computedStatistics.isEmpty()) {
+            computedStatistics.forEach(statistic -> {
+                statistic.getColumnStatistics().forEach((metadata, block) -> {
+                    checkState(block.getPositionCount() == 1, "Expected a single position in aggregation result block");
+                    String columnName = metadata.getColumnName();
+                    Type type = fakerOutputHandle.columnTypes().get(fakerOutputHandle.columnNames().indexOf(columnName));
+                    if (metadata.getStatisticType().equals(ColumnStatisticType.MIN_VALUE)) {
+                        // TODO overwrite, or compare?
+                        minimums.put(columnName, getValue(type, 0, block));
+                    }
+                    else if (metadata.getStatisticType().equals(ColumnStatisticType.MAX_VALUE)) {
+                        maximums.put(columnName, getValue(type, 0, block));
+                    }
+                    else {
+                        throw new IllegalArgumentException("Unexpected column statistic type: " + metadata.getStatisticType());
+                    }
+                });
+            });
+        }
 
         tables.put(tableName, new TableInfo(info.columns(), info.properties(), info.comment()));
+        views.put(
+                new SchemaTableName(tableName.getSchemaName(), tableName.getTableName() + VIEW_SUFFIX),
+                "SELECT *, \"%s\" FROM %s.%s WHERE %s".formatted(
+                        ROW_ID_COLUMN_NAME,
+                        catalogName,
+                        tableName,
+                        minimums.entrySet().stream()
+                                .map(entry -> "%s BETWEEN %s AND %s".formatted(
+                                        entry.getKey(),
+                                        entry.getValue().toString(),
+                                        maximums.get(entry.getKey()).toString()))
+                                .collect(joining(" AND "))));
         return Optional.empty();
+    }
+
+    private Object getValue(Type type, int position, Block block)
+    {
+        Class<?> javaType = type.getJavaType();
+        if (javaType == boolean.class) {
+            return type.getBoolean(block, position);
+        }
+        if (javaType == long.class) {
+            return type.getLong(block, position);
+        }
+        if (javaType == double.class) {
+            return type.getDouble(block, position);
+        }
+        if (javaType == Slice.class) {
+            return type.getSlice(block, position).toStringUtf8();
+        }
+        return type.getObject(block, position);
+    }
+
+    @Override
+    public TableStatisticsMetadata getStatisticsCollectionMetadataForWrite(ConnectorSession session, ConnectorTableMetadata tableMetadata)
+    {
+        return new TableStatisticsMetadata(
+                tableMetadata.getColumns().stream()
+                        .flatMap(column -> Stream.of(
+                                new ColumnStatisticMetadata(column.getName(), ColumnStatisticType.MIN_VALUE),
+                                new ColumnStatisticMetadata(column.getName(), ColumnStatisticType.MAX_VALUE)))
+                        .collect(toImmutableSet()),
+                Set.of(TableStatisticType.ROW_COUNT),
+                List.of());
     }
 
     @Override

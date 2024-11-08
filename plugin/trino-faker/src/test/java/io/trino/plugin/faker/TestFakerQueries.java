@@ -641,4 +641,17 @@ final class TestFakerQueries
 
         assertUpdate("DROP TABLE faker.default.all_types_range");
     }
+
+    @Test
+    void testCreateTableAsSelect()
+    {
+        assertUpdate("CREATE TABLE faker.default.limited_range WITH (null_probability = 0, default_limit = 50) AS SELECT * FROM (VALUES -1, 3, 5) t(id)", 3);
+
+        assertQuery("SELECT count(id) FROM (SELECT id FROM limited_range) a",
+                "VALUES (50)");
+        assertQuery("SELECT count(id), min(id), max(id) FROM (SELECT id FROM faker.default.limited_range_view) a",
+                "VALUES (50, -1, 5)");
+
+        assertUpdate("DROP TABLE faker.default.limited_range");
+    }
 }

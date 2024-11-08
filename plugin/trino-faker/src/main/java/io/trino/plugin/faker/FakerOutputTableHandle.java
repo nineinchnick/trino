@@ -15,14 +15,19 @@ package io.trino.plugin.faker;
 
 import io.trino.spi.connector.ConnectorOutputTableHandle;
 import io.trino.spi.connector.SchemaTableName;
+import io.trino.spi.type.Type;
+
+import java.util.List;
 
 import static java.util.Objects.requireNonNull;
 
-public record FakerOutputTableHandle(SchemaTableName schemaTableName)
+public record FakerOutputTableHandle(SchemaTableName schemaTableName, List<String> columnNames, List<Type> columnTypes)
         implements ConnectorOutputTableHandle
 {
     public FakerOutputTableHandle
     {
         requireNonNull(schemaTableName, "schemaTableName is null");
+        requireNonNull(columnNames, "columnNames is null");
+        requireNonNull(columnTypes, "columnTypes is null");
     }
 }
