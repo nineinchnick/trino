@@ -113,6 +113,8 @@ class FakerPageSource
 
     private final Random random;
     private final Faker faker;
+    private final SentenceGenerator sentenceGenerator;
+    private final BoundedSentenceGenerator boundedSentenceGenerator;
     private final long limit;
     private final List<Generator> generators;
     private long completedRows;
@@ -131,6 +133,8 @@ class FakerPageSource
     {
         this.faker = requireNonNull(faker, "faker is null");
         this.random = requireNonNull(random, "random is null");
+        this.sentenceGenerator = () -> Slices.utf8Slice(faker.lorem().sentence(3 + random.nextInt(38)));
+        this.boundedSentenceGenerator = (maxLength) -> Slices.utf8Slice(faker.lorem().maxLengthSentence(maxLength));
         List<Type> types = requireNonNull(columns, "columns is null")
                 .stream()
                 .map(FakerColumnHandle::type)
@@ -323,7 +327,7 @@ class FakerPageSource
             if (!range.isAll()) {
                 throw new TrinoException(INVALID_ROW_FILTER, "Predicates for varbinary columns are not supported");
             }
-            return (blockBuilder) -> varType.writeSlice(blockBuilder, Slices.utf8Slice(faker.lorem().sentence(3 + random.nextInt(38))));
+            return (blockBuilder) -> varType.writeSlice(blockBuilder, sentenceGenerator.get());
         }
         if (type instanceof VarcharType varcharType) {
             if (!range.isAll()) {
@@ -331,15 +335,15 @@ class FakerPageSource
             }
             if (varcharType.getLength().isPresent()) {
                 int length = varcharType.getLength().get();
-                return (blockBuilder) -> varcharType.writeSlice(blockBuilder, Slices.utf8Slice(faker.lorem().maxLengthSentence(random.nextInt(length))));
+                return (blockBuilder) -> varcharType.writeSlice(blockBuilder, boundedSentenceGenerator.get(random.nextInt(length)));
             }
-            return (blockBuilder) -> varcharType.writeSlice(blockBuilder, Slices.utf8Slice(faker.lorem().sentence(3 + random.nextInt(38))));
+            return (blockBuilder) -> varcharType.writeSlice(blockBuilder, sentenceGenerator.get());
         }
         if (type instanceof CharType charType) {
             if (!range.isAll()) {
                 throw new TrinoException(INVALID_ROW_FILTER, "Predicates for char columns are not supported");
             }
-            return (blockBuilder) -> charType.writeSlice(blockBuilder, Slices.utf8Slice(faker.lorem().maxLengthSentence(charType.getLength())));
+            return (blockBuilder) -> charType.writeSlice(blockBuilder, boundedSentenceGenerator.get(charType.getLength()));
         }
         // not supported: ROW, ARRAY, MAP, JSON
         if (IPADDRESS.equals(type)) {
@@ -778,5 +782,17 @@ class FakerPageSource
     private interface Generator
     {
         void accept(BlockBuilder blockBuilder);
+    }
+
+    @FunctionalInterface
+    private interface SentenceGenerator
+    {
+        Slice get();
+    }
+
+    @FunctionalInterface
+    private interface BoundedSentenceGenerator
+    {
+        Slice get(int maxLength);
     }
 }
