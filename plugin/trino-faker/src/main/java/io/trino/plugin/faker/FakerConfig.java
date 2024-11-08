@@ -23,6 +23,7 @@ public class FakerConfig
 {
     private double nullProbability = 0.5;
     private long defaultLimit = 1000L;
+    private double maxDistinctValuesRatio = 1.0;
 
     @Max(1)
     @Min(0)
@@ -50,6 +51,21 @@ public class FakerConfig
     public FakerConfig setDefaultLimit(long value)
     {
         this.defaultLimit = value;
+        return this;
+    }
+
+    @Max(1)
+    @Min(0)
+    public double getMaxDistinctValuesRatio()
+    {
+        return maxDistinctValuesRatio;
+    }
+
+    @Config("faker.max-distinct-values-ratio")
+    @ConfigDescription("Default maximum distinct values ratio for any column in any table")
+    public FakerConfig setMaxDistinctValuesRatio(double value)
+    {
+        this.maxDistinctValuesRatio = value;
         return this;
     }
 }

@@ -24,6 +24,7 @@ public record FakerColumnHandle(
         String name,
         Type type,
         double nullProbability,
+        double maxDistinctValuesRatio,
         String generator)
         implements ColumnHandle
 {
@@ -31,5 +32,10 @@ public record FakerColumnHandle(
     {
         requireNonNull(name, "name is null");
         requireNonNull(type, "type is null");
+    }
+
+    public FakerColumnHandle withMaxDistinctValuesRatio(double maxDistinctValuesRatio)
+    {
+        return new FakerColumnHandle(columnIndex, name, type, nullProbability, maxDistinctValuesRatio, generator);
     }
 }

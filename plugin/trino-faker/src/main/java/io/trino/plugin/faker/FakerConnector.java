@@ -118,6 +118,12 @@ public class FakerConnector
                         "Default limit of rows returned from any table in this schema, if not specified in the query",
                         null,
                         defaultLimit -> checkProperty(1 <= defaultLimit, INVALID_SCHEMA_PROPERTY, "default_limit value must be equal or greater than 1"),
+                        false),
+                doubleProperty(
+                        SchemaInfo.MAX_DISTINCT_VALUES_RATIO,
+                        "Default maximum distinct values ratio for any column in any table of this schema",
+                        null,
+                        maxRatio -> checkProperty(0 <= maxRatio && maxRatio <= 1, INVALID_SCHEMA_PROPERTY, "max_distinct_values_ratio value must be between 0 and 1, inclusive"),
                         false));
     }
 
@@ -136,6 +142,12 @@ public class FakerConnector
                         "Default limit of rows returned from this table if not specified in the query",
                         null,
                         defaultLimit -> checkProperty(1 <= defaultLimit, INVALID_TABLE_PROPERTY, "default_limit value must be equal or greater than 1"),
+                        false),
+                doubleProperty(
+                        TableInfo.MAX_DISTINCT_VALUES_RATIO,
+                        "Default maximum distinct values ratio for any column in this table",
+                        null,
+                        maxRatio -> checkProperty(0 <= maxRatio && maxRatio <= 1, INVALID_TABLE_PROPERTY, "max_distinct_values_ratio value must be between 0 and 1, inclusive"),
                         false));
     }
 
@@ -161,6 +173,12 @@ public class FakerConnector
                                 throw new TrinoException(INVALID_COLUMN_PROPERTY, "generator must be a valid Faker expression", e);
                             }
                         },
+                        false),
+                doubleProperty(
+                        ColumnInfo.MAX_DISTINCT_VALUES_RATIO,
+                        "Default maximum distinct values ratio in this column",
+                        null,
+                        maxRatio -> checkProperty(0 <= maxRatio && maxRatio <= 1, INVALID_COLUMN_PROPERTY, "max_distinct_values_ratio value must be between 0 and 1, inclusive"),
                         false));
     }
 

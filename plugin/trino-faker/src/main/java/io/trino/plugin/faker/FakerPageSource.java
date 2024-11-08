@@ -46,6 +46,7 @@ import java.math.BigInteger;
 import java.net.Inet4Address;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
@@ -81,6 +82,7 @@ import static java.lang.Float.floatToRawIntBits;
 import static java.lang.Float.intBitsToFloat;
 import static java.lang.Math.toIntExact;
 import static java.lang.System.arraycopy;
+import static java.util.Collections.shuffle;
 import static java.util.Objects.requireNonNull;
 
 class FakerPageSource
@@ -150,8 +152,10 @@ class FakerPageSource
             long offset)
     {
         if (ROW_ID_COLUMN_NAME.equals(column.name())) {
-            return new Generator() {
+            return new Generator()
+            {
                 long currentRowId = offset;
+
                 @Override
                 public void accept(BlockBuilder blockBuilder)
                 {
@@ -233,7 +237,7 @@ class FakerPageSource
             return (blockBuilder) -> singleValueWriter.accept(blockBuilder, domain.getSingleValue());
         }
         if (domain.getValues().isDiscreteSet()) {
-            List<Object> values = domain.getValues().getDiscreteSet();
+            List<Object> values = choices(domain.getValues().getDiscreteSet(), handle.maxDistinctValuesRatio());
             if (domain.getValues().getDiscreteValues().isInclusive()) {
                 ObjectWriter singleValueWriter = objectWriter(handle.type());
                 return (blockBuilder) -> singleValueWriter.accept(blockBuilder, values.get(random.nextInt(values.size())));
@@ -256,6 +260,16 @@ class FakerPageSource
                 generator.accept(blockBuilder);
             }
         };
+    }
+
+    private List<Object> choices(List<Object> values, double maxDistinctValuesRatio)
+    {
+        if (maxDistinctValuesRatio == 1.0) {
+            return values;
+        }
+        values = new ArrayList<>(values);
+        shuffle(values);
+        return values.subList(0, (int) (values.size() * maxDistinctValuesRatio));
     }
 
     private Generator randomValueGenerator(FakerColumnHandle handle, Range range)

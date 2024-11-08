@@ -27,6 +27,7 @@ public record TableInfo(List<ColumnInfo> columns, Map<String, Object> properties
 {
     public static final String NULL_PROBABILITY_PROPERTY = "null_probability";
     public static final String DEFAULT_LIMIT_PROPERTY = "default_limit";
+    public static final String MAX_DISTINCT_VALUES_RATIO = "max_distinct_values_ratio";
 
     public TableInfo
     {

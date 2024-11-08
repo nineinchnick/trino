@@ -68,6 +68,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -83,6 +84,7 @@ import static io.trino.spi.StandardErrorCode.SCHEMA_ALREADY_EXISTS;
 import static io.trino.spi.StandardErrorCode.SCHEMA_NOT_FOUND;
 import static io.trino.spi.StandardErrorCode.TABLE_ALREADY_EXISTS;
 import static io.trino.spi.connector.RetryMode.NO_RETRIES;
+import static io.trino.spi.type.BigintType.BIGINT;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static java.util.stream.Collectors.joining;
@@ -98,6 +100,7 @@ public class FakerMetadata
     private final List<SchemaInfo> schemas = new ArrayList<>();
     private final double nullProbability;
     private final long defaultLimit;
+    private final double maxDistinctValuesRatio;
     private final FakerFunctionProvider functionsProvider;
     private final CatalogName catalogName;
 
@@ -111,6 +114,7 @@ public class FakerMetadata
         this.schemas.add(new SchemaInfo(SCHEMA_NAME, Map.of()));
         this.nullProbability = config.getNullProbability();
         this.defaultLimit = config.getDefaultLimit();
+        this.maxDistinctValuesRatio = config.getMaxDistinctValuesRatio();
         this.functionsProvider = requireNonNull(functionProvider, "functionProvider is null");
         this.catalogName = requireNonNull(catalogName, "catalogName is null");
     }
@@ -370,6 +374,8 @@ public class FakerMetadata
 
         double schemaNullProbability = (double) schema.properties().getOrDefault(SchemaInfo.NULL_PROBABILITY_PROPERTY, nullProbability);
         double tableNullProbability = (double) tableMetadata.getProperties().getOrDefault(TableInfo.NULL_PROBABILITY_PROPERTY, schemaNullProbability);
+        double schemaMaxDistinctValuesRatio = (double) schema.properties().getOrDefault(SchemaInfo.MAX_DISTINCT_VALUES_RATIO, maxDistinctValuesRatio);
+        double tableMaxDistinctValuesRatio = (double) tableMetadata.getProperties().getOrDefault(TableInfo.MAX_DISTINCT_VALUES_RATIO, schemaMaxDistinctValuesRatio);
 
         ImmutableList.Builder<ColumnInfo> columnsBuilder = ImmutableList.builder();
         int columnId = 0;
@@ -380,15 +386,22 @@ public class FakerMetadata
                 nullProbability = (double) column.getProperties().getOrDefault(ColumnInfo.NULL_PROBABILITY_PROPERTY, tableNullProbability);
             }
             String generator = (String) column.getProperties().get(ColumnInfo.GENERATOR_PROPERTY);
-            if (generator != null && !isCharacterColumn(column)) {
-                throw new TrinoException(INVALID_COLUMN_PROPERTY, "The `generator` property can only be set for CHAR, VARCHAR or VARBINARY columns");
+            if (generator != null) {
+                if (!isCharacterColumn(column)) {
+                    throw new TrinoException(INVALID_COLUMN_PROPERTY, "The `generator` property can only be set for CHAR, VARCHAR or VARBINARY columns");
+                }
+                if (column.getProperties().containsKey(ColumnInfo.NULL_PROBABILITY_PROPERTY)) {
+                    throw new TrinoException(INVALID_COLUMN_PROPERTY, "The `max_distinct_values_ratio` and the `generator` properties cannot be used at the same time");
+                }
             }
+            double maxDistinctValuesRatio = (double) column.getProperties().getOrDefault(ColumnInfo.MAX_DISTINCT_VALUES_RATIO, tableMaxDistinctValuesRatio);
             columnsBuilder.add(new ColumnInfo(
                     new FakerColumnHandle(
                             columnId,
                             column.getName(),
                             column.getType(),
                             nullProbability,
+                            maxDistinctValuesRatio,
                             generator),
                     column));
         }
@@ -399,6 +412,7 @@ public class FakerMetadata
                         ROW_ID_COLUMN_NAME,
                         BigintType.BIGINT,
                         0,
+                        1,
                         ""),
                 ColumnMetadata.builder()
                         .setName(ROW_ID_COLUMN_NAME)
@@ -459,8 +473,15 @@ public class FakerMetadata
 
         Map<String, Object> minimums = new HashMap<>();
         Map<String, Object> maximums = new HashMap<>();
+        Map<String, Long> distincts = new HashMap<>();
+        AtomicReference<Long> rowCount = new AtomicReference<>(0L);
         if (!computedStatistics.isEmpty()) {
             computedStatistics.forEach(statistic -> {
+                Block rowCountBlock = statistic.getTableStatistics().get(TableStatisticType.ROW_COUNT);
+                requireNonNull(rowCountBlock, "rowCountBlock is null");
+                // TODO overwrite, or compare?
+                rowCount.set((Long) getValue(BIGINT, 0, rowCountBlock));
+
                 statistic.getColumnStatistics().forEach((metadata, block) -> {
                     checkState(block.getPositionCount() == 1, "Expected a single position in aggregation result block");
                     String columnName = metadata.getColumnName();
@@ -472,14 +493,24 @@ public class FakerMetadata
                     else if (metadata.getStatisticType().equals(ColumnStatisticType.MAX_VALUE)) {
                         maximums.put(columnName, getValue(type, 0, block));
                     }
+                    else if (metadata.getStatisticType().equals(ColumnStatisticType.NUMBER_OF_DISTINCT_VALUES)) {
+                        distincts.put(columnName, (Long) getValue(BIGINT, 0, block));
+                    }
                     else {
-                        throw new IllegalArgumentException("Unexpected column statistic type: " + metadata.getStatisticType());
+                        throw new IllegalArgumentException("Unsupported column statistic type: " + metadata.getStatisticType());
                     }
                 });
             });
         }
 
-        tables.put(tableName, new TableInfo(info.columns(), info.properties(), info.comment()));
+        List<ColumnInfo> columns = info.columns().stream()
+                .map(column -> new ColumnInfo(
+                        !distincts.containsKey(column.name()) ?
+                                column.handle()
+                                : column.handle().withMaxDistinctValuesRatio(distincts.get(column.name()).doubleValue() / rowCount.get()),
+                        column.metadata()))
+                .collect(toImmutableList());
+        tables.put(tableName, new TableInfo(columns, info.properties(), info.comment()));
         views.put(
                 new SchemaTableName(tableName.getSchemaName(), tableName.getTableName() + VIEW_SUFFIX),
                 "SELECT *, \"%s\" FROM %s.%s WHERE %s".formatted(
@@ -520,7 +551,8 @@ public class FakerMetadata
                 tableMetadata.getColumns().stream()
                         .flatMap(column -> Stream.of(
                                 new ColumnStatisticMetadata(column.getName(), ColumnStatisticType.MIN_VALUE),
-                                new ColumnStatisticMetadata(column.getName(), ColumnStatisticType.MAX_VALUE)))
+                                new ColumnStatisticMetadata(column.getName(), ColumnStatisticType.MAX_VALUE),
+                                new ColumnStatisticMetadata(column.getName(), ColumnStatisticType.NUMBER_OF_DISTINCT_VALUES)))
                         .collect(toImmutableSet()),
                 Set.of(TableStatisticType.ROW_COUNT),
                 List.of());
