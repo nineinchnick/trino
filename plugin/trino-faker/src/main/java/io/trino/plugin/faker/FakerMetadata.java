@@ -66,6 +66,7 @@ import java.util.Set;
 import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
 
+import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.base.Verify.verify;
@@ -434,7 +435,7 @@ public class FakerMetadata
         ImmutableMap.Builder<String, Long> distinctValuesBuilder = ImmutableMap.builder();
         List<ColumnInfo> columns = info.columns();
         Map<String, Type> types = columns.stream().collect(toImmutableMap(ColumnInfo::name, ColumnInfo::type));
-        long rowCount = 1;
+        Long rowCount = null;
         for (ComputedStatistics statistic : computedStatistics) {
             if (!statistic.getTableStatistics().get(ROW_COUNT).isNull(0)) {
                 rowCount = BIGINT.getLong(statistic.getTableStatistics().get(ROW_COUNT), 0);
@@ -458,11 +459,18 @@ public class FakerMetadata
         Map<String, Object> maximums = maximumsBuilder.buildOrThrow();
         Map<String, Long> distinctValues = distinctValuesBuilder.buildOrThrow();
 
+        if (!info.properties().containsKey(TableInfo.DEFAULT_LIMIT_PROPERTY) && rowCount != null) {
+            info = info.withProperties(ImmutableMap.<String, Object>builder()
+                    .putAll(info.properties())
+                    .put(TableInfo.DEFAULT_LIMIT_PROPERTY, rowCount)
+                    .buildOrThrow());
+        }
+
         if (minimums.isEmpty() && distinctValues.isEmpty()) {
             return info;
         }
 
-        long finalRowCount = rowCount;
+        long finalRowCount = firstNonNull(rowCount, 1L);
         return info.withColumns(columns.stream().map(column -> createColumnInfoFromStats(
                         column,
                         minimums.get(column.name()),
