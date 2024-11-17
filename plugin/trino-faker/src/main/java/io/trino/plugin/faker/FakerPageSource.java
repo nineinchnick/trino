@@ -41,11 +41,15 @@ import io.trino.spi.type.Type;
 import io.trino.spi.type.VarbinaryType;
 import io.trino.spi.type.VarcharType;
 import net.datafaker.Faker;
+import net.datafaker.providers.base.AbstractProvider;
+import net.datafaker.providers.base.ProviderRegistration;
 
+import java.lang.reflect.Method;
 import java.math.BigInteger;
 import java.net.Inet4Address;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
@@ -82,6 +86,7 @@ import static java.lang.Float.intBitsToFloat;
 import static java.lang.Math.toIntExact;
 import static java.lang.System.arraycopy;
 import static java.util.Objects.requireNonNull;
+import static java.util.stream.Collectors.joining;
 
 class FakerPageSource
         implements ConnectorPageSource
@@ -129,6 +134,16 @@ class FakerPageSource
             long limit)
     {
         this.faker = requireNonNull(faker, "faker is null");
+        // TODO inspect these interfaces BaseProviders, SportProviders, FoodProviders, EntertainmentProviders, VideoGameProviders, HealthcareProviders
+        String result = Arrays.stream(faker.getClass().getInterfaces())
+                .filter(ProviderRegistration.class::isAssignableFrom)
+                .flatMap(fakerInterface -> Arrays.stream(fakerInterface.getDeclaredMethods())
+                        .filter(method -> method.getParameterCount() == 0 && AbstractProvider.class.isAssignableFrom(method.getReturnType()))
+                        .map(Method::getReturnType)
+                        .flatMap(fakerProvider -> Arrays.stream(fakerProvider.getDeclaredMethods())
+                            .filter(method -> method.getReturnType() == String.class && method.getParameterCount() == 0)
+                            .map(method -> fakerInterface.getSimpleName() + ": " + fakerProvider.getSimpleName() + "." + method.getName())))
+                .collect(joining("\n"));
         this.random = requireNonNull(random, "random is null");
         List<Type> types = requireNonNull(columns, "columns is null")
                 .stream()
