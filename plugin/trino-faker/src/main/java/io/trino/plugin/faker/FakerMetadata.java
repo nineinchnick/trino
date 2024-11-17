@@ -114,6 +114,7 @@ public class FakerMetadata
     private final List<SchemaInfo> schemas = new ArrayList<>();
     private final double nullProbability;
     private final long defaultLimit;
+    private final double sequenceMinDistinctValuesRatio;
     private final long maxDictionarySize;
     private final FakerFunctionProvider functionsProvider;
 
@@ -131,6 +132,7 @@ public class FakerMetadata
         this.schemas.add(new SchemaInfo(SCHEMA_NAME, Map.of()));
         this.nullProbability = config.getNullProbability();
         this.defaultLimit = config.getDefaultLimit();
+        this.sequenceMinDistinctValuesRatio = config.getSequenceMinDistinctValuesRatio();
         this.maxDictionarySize = config.getMaxDictionarySize();
         this.functionsProvider = requireNonNull(functionProvider, "functionProvider is null");
         this.random = new Random(1);
@@ -486,17 +488,21 @@ public class FakerMetadata
 
         long finalRowCount = firstNonNull(rowCount, 1L);
         Map<String, List<Object>> columnValues = getColumnValues(tableName, info, distinctValues, minimums, maximums);
+        SchemaInfo schema = getSchema(tableName.getSchemaName());
+        double schemaMinSequenceRatio = (double) schema.properties().getOrDefault(SchemaInfo.SEQUENCE_MIN_DISTINCT_VALUES_RATIO, sequenceMinDistinctValuesRatio);
+        double tableMinSequenceRatio = (double) info.properties().getOrDefault(TableInfo.SEQUENCE_MIN_DISTINCT_VALUES_RATIO, schemaMinSequenceRatio);
         return info.withColumns(columns.stream().map(column -> createColumnInfoFromStats(
                         column,
                         minimums.get(column.name()),
                         maximums.get(column.name()),
                         requireNonNull(distinctValues.getOrDefault(column.name(), 0L)),
                         finalRowCount,
-                        columnValues.get(column.name())))
+                        columnValues.get(column.name()),
+                        tableMinSequenceRatio))
                 .collect(toImmutableList()));
     }
 
-    private static ColumnInfo createColumnInfoFromStats(ColumnInfo column, Object min, Object max, long distinctValues, long rowCount, List<Object> allowedValues)
+    private static ColumnInfo createColumnInfoFromStats(ColumnInfo column, Object min, Object max, long distinctValues, long rowCount, List<Object> allowedValues, double minSequenceRatio)
     {
         if (isNotRangeType(column.type()) || min == null || max == null) {
             return column;
@@ -517,7 +523,7 @@ public class FakerMetadata
         // Only include types that support generating sequences in FakerPageSource,
         // but don't include types with configurable precision, dates, or intervals.
         // The number of distinct values is an approximation, so compare it with a margin.
-        if (isSequenceType(column.type()) && (double) distinctValues / rowCount >= 0.98) {
+        if (isSequenceType(column.type()) && (double) distinctValues / rowCount >= minSequenceRatio) {
             handle = handle.withStep(ValueSet.of(column.type(), 1L));
             properties.put(STEP_PROPERTY, "1");
         }
