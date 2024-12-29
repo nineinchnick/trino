@@ -139,7 +139,12 @@ public record FakerColumnHandle(
         }
         if (DATE.equals(column.getType()) || type instanceof TimestampType || type instanceof TimestampWithTimeZoneType || type instanceof TimeType || type instanceof TimeWithTimeZoneType) {
             try {
-                return ValueSet.of(BIGINT, Duration.valueOf(rawStep).roundTo(TimeUnit.NANOSECONDS));
+                byte sign = 1;
+                if (rawStep.charAt(0) == '-') {
+                    rawStep = rawStep.substring(1);
+                    sign = -1;
+                }
+                return ValueSet.of(BIGINT, sign * Duration.valueOf(rawStep).roundTo(TimeUnit.NANOSECONDS));
             }
             catch (IllegalArgumentException e) {
                 throw new TrinoException(INVALID_COLUMN_PROPERTY, "The `%s` property for a %s column must be a valid duration literal".formatted(STEP_PROPERTY, column.getType().getDisplayName()), e);

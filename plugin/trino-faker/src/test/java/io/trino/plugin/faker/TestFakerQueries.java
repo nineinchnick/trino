@@ -388,43 +388,95 @@ final class TestFakerQueries
     @Test
     void testSelectStepProperties()
     {
-        // small step in small ranges that produce only 10 unique values for 1000 rows
+        // small positive step in small ranges that produce only 4 unique values for 1000 rows
         List<TestDataType> testCases = ImmutableList.<TestDataType>builder()
-                .add(new TestDataType("rnd_bigint", "bigint", Map.of("min", "0", "max", "9", "step", "1"), "count(distinct rnd_bigint)", "10"))
-                .add(new TestDataType("rnd_integer", "integer", Map.of("min", "0", "max", "9", "step", "1"), "count(distinct rnd_integer)", "10"))
-                .add(new TestDataType("rnd_smallint", "smallint", Map.of("min", "0", "max", "9", "step", "1"), "count(distinct rnd_smallint)", "10"))
-                .add(new TestDataType("rnd_tinyint", "tinyint", Map.of("min", "0", "max", "9", "step", "1"), "count(distinct rnd_tinyint)", "10"))
-                .add(new TestDataType("rnd_date", "date", Map.of("min", "2022-03-01", "max", "2022-03-10", "step", "1d"), "count(distinct rnd_date)", "10"))
-                .add(new TestDataType("rnd_decimal1", "decimal", Map.of("min", "0", "max", "9", "step", "1"), "count(distinct rnd_decimal1)", "10"))
-                .add(new TestDataType("rnd_decimal2", "decimal(18,5)", Map.of("min", "0.00000", "max", "0.00009", "step", "0.00001"), "count(distinct rnd_decimal2)", "10"))
-                .add(new TestDataType("rnd_decimal3", "decimal(38,0)", Map.of("min", "0", "max", "9", "step", "1"), "count(distinct rnd_decimal3)", "10"))
-                .add(new TestDataType("rnd_decimal4", "decimal(38,38)", Map.of("min", "0.00000000000000000000000000000000000000", "max", "0.00000000000000000000000000000000000009", "step", "0.00000000000000000000000000000000000001"), "count(distinct rnd_decimal4)", "10"))
-                .add(new TestDataType("rnd_decimal5", "decimal(5,2)", Map.of("min", "0.00", "max", "1.09", "step", "0.01"), "count(distinct rnd_decimal5)", "110"))
-                .add(new TestDataType("rnd_real", "real", Map.of("min", "0.0", "max", "1.3E-44", "step", "1.4E-45"), "count(distinct rnd_real)", "10"))
-                .add(new TestDataType("rnd_double", "double", Map.of("min", "0.0", "max", "4.4E-323", "step", "4.9E-324"), "count(distinct rnd_double)", "10"))
-                .add(new TestDataType("rnd_interval1", "interval day to second", Map.of("min", "0.000", "max", "0.009", "step", "0.001"), "count(distinct rnd_interval1)", "10"))
-                .add(new TestDataType("rnd_interval2", "interval year to month", Map.of("min", "0", "max", "9", "step", "1"), "count(distinct rnd_interval2)", "10"))
-                .add(new TestDataType("rnd_timestamp", "timestamp", Map.of("min", "2022-03-21 00:00:00.000", "max", "2022-03-21 00:00:00.009", "step", "1ms"), "count(distinct rnd_timestamp)", "10"))
-                .add(new TestDataType("rnd_timestamp0", "timestamp(0)", Map.of("min", "2022-03-21 00:00:00", "max", "2022-03-21 00:00:09", "step", "1s"), "count(distinct rnd_timestamp0)", "10"))
-                .add(new TestDataType("rnd_timestamp6", "timestamp(6)", Map.of("min", "2022-03-21 00:00:00.000000", "max", "2022-03-21 00:00:00.000009", "step", "1us"), "count(distinct rnd_timestamp6)", "10"))
-                .add(new TestDataType("rnd_timestamp9", "timestamp(9)", Map.of("min", "2022-03-21 00:00:00.000000000", "max", "2022-03-21 00:00:00.000009000", "step", "1us"), "count(distinct rnd_timestamp9)", "10"))
-                .add(new TestDataType("rnd_timestamptz", "timestamp with time zone", Map.of("min", "2022-03-21 00:00:00.000 +01:00", "max", "2022-03-21 00:00:00.009 +01:00", "step", "1ms"), "count(distinct rnd_timestamptz)", "10"))
-                .add(new TestDataType("rnd_timestamptz0", "timestamp(0) with time zone", Map.of("min", "2022-03-21 00:00:00 +01:00", "max", "2022-03-21 00:00:09 +01:00", "step", "1s"), "count(distinct rnd_timestamptz0)", "10"))
-                .add(new TestDataType("rnd_timestamptz6", "timestamp(6) with time zone", Map.of("min", "2022-03-21 00:00:00.000000 +01:00", "max", "2022-03-21 00:00:00.009000 +01:00", "step", "1ms"), "count(distinct rnd_timestamptz6)", "10"))
-                .add(new TestDataType("rnd_timestamptz9", "timestamp(9) with time zone", Map.of("min", "2022-03-21 00:00:00.000000000 +01:00", "max", "2022-03-21 00:00:00.009000000 +01:00", "step", "1ms"), "count(distinct rnd_timestamptz9)", "10"))
-                .add(new TestDataType("rnd_time", "time", Map.of("min", "01:02:03.456", "max", "01:02:03.465", "step", "1ms"), "count(distinct rnd_time)", "10"))
-                .add(new TestDataType("rnd_time0", "time(0)", Map.of("min", "01:02:03", "max", "01:02:12", "step", "1s"), "count(distinct rnd_time0)", "10"))
-                .add(new TestDataType("rnd_time6", "time(6)", Map.of("min", "01:02:03.000456", "max", "01:02:03.000465", "step", "1us"), "count(distinct rnd_time6)", "10"))
-                .add(new TestDataType("rnd_time9", "time(9)", Map.of("min", "01:02:03.000000456", "max", "01:02:03.000000465", "step", "1ns"), "count(distinct rnd_time9)", "10"))
-                .add(new TestDataType("rnd_timetz", "time with time zone", Map.of("min", "01:02:03.456 +01:00", "max", "01:02:03.465 +01:00", "step", "1ms"), "count(distinct rnd_timetz)", "10"))
-                .add(new TestDataType("rnd_timetz0", "time(0) with time zone", Map.of("min", "01:02:03 +01:00", "max", "01:02:12 +01:00", "step", "1s"), "count(distinct rnd_timetz0)", "10"))
-                .add(new TestDataType("rnd_timetz6", "time(6) with time zone", Map.of("min", "01:02:03.000456 +01:00", "max", "01:02:03.000465 +01:00", "step", "1us"), "count(distinct rnd_timetz6)", "10"))
-                .add(new TestDataType("rnd_timetz9", "time(9) with time zone", Map.of("min", "01:02:03.000000456 +01:00", "max", "01:02:03.000000465 +01:00", "step", "1ns"), "count(distinct rnd_timetz9)", "10"))
-                .add(new TestDataType("rnd_timetz12", "time(12) with time zone", Map.of("min", "01:02:03.000000000456 +01:00", "max", "01:02:03.000000009456 +01:00", "step", "1ns"), "count(distinct rnd_timetz12)", "10"))
+                .add(new TestDataType("pos_bigint", "bigint", Map.of("min", "0", "max", "9", "step", "4"), "count(distinct pos_bigint)", "4"))
+                .add(new TestDataType("pos_integer", "integer", Map.of("min", "0", "max", "9", "step", "4"), "count(distinct pos_integer)", "4"))
+                .add(new TestDataType("pos_smallint", "smallint", Map.of("min", "0", "max", "9", "step", "4"), "count(distinct pos_smallint)", "4"))
+                .add(new TestDataType("pos_tinyint", "tinyint", Map.of("min", "0", "max", "9", "step", "4"), "count(distinct pos_tinyint)", "4"))
+                .add(new TestDataType("pos_date", "date", Map.of("min", "2022-03-01", "max", "2022-03-10", "step", "4d"), "count(distinct pos_date)", "4"))
+                .add(new TestDataType("pos_decimal1", "decimal", Map.of("min", "0", "max", "9", "step", "4"), "count(distinct pos_decimal1)", "4"))
+                .add(new TestDataType("pos_decimal2", "decimal(18,5)", Map.of("min", "0.00000", "max", "0.00009", "step", "0.00004"), "count(distinct pos_decimal2)", "4"))
+                .add(new TestDataType("pos_decimal3", "decimal(38,0)", Map.of("min", "0", "max", "9", "step", "4"), "count(distinct pos_decimal3)", "4"))
+                .add(new TestDataType("pos_decimal4", "decimal(38,38)", Map.of("min", "0.00000000000000000000000000000000000000", "max", "0.00000000000000000000000000000000000009", "step", "0.00000000000000000000000000000000000004"), "count(distinct pos_decimal4)", "4"))
+                .add(new TestDataType("pos_decimal5", "decimal(5,2)", Map.of("min", "0.00", "max", "0.09", "step", "0.04"), "count(distinct pos_decimal5)", "4"))
+                .add(new TestDataType("pos_real", "real", Map.of("min", "0.0", "max", "1.3E-44", "step", "5.6E-45"), "count(distinct pos_real)", "4"))
+                .add(new TestDataType("pos_double", "double", Map.of("min", "0.0", "max", "4.4E-323", "step", "2.0E-323"), "count(distinct pos_double)", "4"))
+                .add(new TestDataType("pos_interval1", "interval day to second", Map.of("min", "0.000", "max", "0.009", "step", "0.004"), "count(distinct pos_interval1)", "4"))
+                .add(new TestDataType("pos_interval2", "interval year to month", Map.of("min", "0", "max", "9", "step", "4"), "count(distinct pos_interval2)", "4"))
+                .add(new TestDataType("pos_timestamp", "timestamp", Map.of("min", "2022-03-21 00:00:00.000", "max", "2022-03-21 00:00:00.009", "step", "4ms"), "count(distinct pos_timestamp)", "4"))
+                .add(new TestDataType("pos_timestamp0", "timestamp(0)", Map.of("min", "2022-03-21 00:00:00", "max", "2022-03-21 00:00:09", "step", "4s"), "count(distinct pos_timestamp0)", "4"))
+                .add(new TestDataType("pos_timestamp6", "timestamp(6)", Map.of("min", "2022-03-21 00:00:00.000000", "max", "2022-03-21 00:00:00.000009", "step", "4us"), "count(distinct pos_timestamp6)", "4"))
+                .add(new TestDataType("pos_timestamp9", "timestamp(9)", Map.of("min", "2022-03-21 00:00:00.000000000", "max", "2022-03-21 00:00:00.000009000", "step", "4us"), "count(distinct pos_timestamp9)", "4"))
+                .add(new TestDataType("pos_timestamptz", "timestamp with time zone", Map.of("min", "2022-03-21 00:00:00.000 +01:00", "max", "2022-03-21 00:00:00.009 +01:00", "step", "4ms"), "count(distinct pos_timestamptz)", "4"))
+                .add(new TestDataType("pos_timestamptz0", "timestamp(0) with time zone", Map.of("min", "2022-03-21 00:00:00 +01:00", "max", "2022-03-21 00:00:09 +01:00", "step", "4s"), "count(distinct pos_timestamptz0)", "4"))
+                .add(new TestDataType("pos_timestamptz6", "timestamp(6) with time zone", Map.of("min", "2022-03-21 00:00:00.000000 +01:00", "max", "2022-03-21 00:00:00.009000 +01:00", "step", "4ms"), "count(distinct pos_timestamptz6)", "4"))
+                .add(new TestDataType("pos_timestamptz9", "timestamp(9) with time zone", Map.of("min", "2022-03-21 00:00:00.000000000 +01:00", "max", "2022-03-21 00:00:00.009000000 +01:00", "step", "4ms"), "count(distinct pos_timestamptz9)", "4"))
+                .add(new TestDataType("pos_time", "time", Map.of("min", "01:02:03.456", "max", "01:02:03.465", "step", "4ms"), "count(distinct pos_time)", "4"))
+                .add(new TestDataType("pos_time0", "time(0)", Map.of("min", "01:02:03", "max", "01:02:12", "step", "4s"), "count(distinct pos_time0)", "4"))
+                .add(new TestDataType("pos_time6", "time(6)", Map.of("min", "01:02:03.000456", "max", "01:02:03.000465", "step", "4us"), "count(distinct pos_time6)", "4"))
+                .add(new TestDataType("pos_time9", "time(9)", Map.of("min", "01:02:03.000000456", "max", "01:02:03.000000465", "step", "4ns"), "count(distinct pos_time9)", "4"))
+                .add(new TestDataType("pos_timetz", "time with time zone", Map.of("min", "01:02:03.456 +01:00", "max", "01:02:03.465 +01:00", "step", "4ms"), "count(distinct pos_timetz)", "4"))
+                .add(new TestDataType("pos_timetz0", "time(0) with time zone", Map.of("min", "01:02:03 +01:00", "max", "01:02:12 +01:00", "step", "4s"), "count(distinct pos_timetz0)", "4"))
+                .add(new TestDataType("pos_timetz6", "time(6) with time zone", Map.of("min", "01:02:03.000456 +01:00", "max", "01:02:03.000465 +01:00", "step", "4us"), "count(distinct pos_timetz6)", "4"))
+                .add(new TestDataType("pos_timetz9", "time(9) with time zone", Map.of("min", "01:02:03.000000456 +01:00", "max", "01:02:03.000000465 +01:00", "step", "4ns"), "count(distinct pos_timetz9)", "4"))
+                .add(new TestDataType("pos_timetz12", "time(12) with time zone", Map.of("min", "01:02:03.000000000456 +01:00", "max", "01:02:03.000000009456 +01:00", "step", "4ns"), "count(distinct pos_timetz12)", "4"))
                 .build();
 
         for (TestDataType testCase : testCases) {
             try (TestTable table = new TestTable(getQueryRunner()::execute, "step_small_" + testCase.name(), "(%s)".formatted(testCase.columnSchema()))) {
+                assertQuery("SELECT %s FROM %s".formatted(testCase.queryExpression(), table.getName()), "VALUES (%s)".formatted(testCase.expectedValue()));
+            }
+        }
+
+        // small negative step in small ranges that produce only 4 unique values for 1000 rows
+        testCases = ImmutableList.<TestDataType>builder()
+                .add(new TestDataType("neg_bigint", "bigint", Map.of("min", "0", "max", "9", "step", "-4"), "count(distinct neg_bigint)", "4"))
+                .add(new TestDataType("neg_integer", "integer", Map.of("min", "0", "max", "9", "step", "-4"), "count(distinct neg_integer)", "4"))
+                .add(new TestDataType("neg_smallint", "smallint", Map.of("min", "0", "max", "9", "step", "-4"), "count(distinct neg_smallint)", "4"))
+                .add(new TestDataType("neg_tinyint", "tinyint", Map.of("min", "0", "max", "9", "step", "-4"), "count(distinct neg_tinyint)", "4"))
+                .add(new TestDataType("neg_date", "date", Map.of("min", "2022-03-01", "max", "2022-03-10", "step", "-4d"), "count(distinct neg_date)", "4"))
+                .add(new TestDataType("neg_decimal1", "decimal", Map.of("min", "0", "max", "9", "step", "-4"), "count(distinct neg_decimal1)", "4"))
+                .add(new TestDataType("neg_decimal2", "decimal(18,5)", Map.of("min", "0.00000", "max", "0.00009", "step", "-0.00004"), "count(distinct neg_decimal2)", "4"))
+                .add(new TestDataType("neg_decimal3", "decimal(38,0)", Map.of("min", "0", "max", "9", "step", "-4"), "count(distinct neg_decimal3)", "4"))
+                .add(new TestDataType("neg_decimal4", "decimal(38,38)", Map.of("min", "0.00000000000000000000000000000000000000", "max", "0.00000000000000000000000000000000000009", "step", "-0.00000000000000000000000000000000000004"), "count(distinct neg_decimal4)", "4"))
+                .add(new TestDataType("neg_decimal5", "decimal(5,2)", Map.of("min", "0.00", "max", "0.09", "step", "-0.04"), "count(distinct neg_decimal5)", "4"))
+                .add(new TestDataType("neg_real", "real", Map.of("min", "0.0", "max", "1.3E-44", "step", "-5.6E-45"), "count(distinct neg_real)", "4"))
+                .add(new TestDataType("neg_double", "double", Map.of("min", "0.0", "max", "4.4E-323", "step", "-2.0E-323"), "count(distinct neg_double)", "4"))
+                .add(new TestDataType("neg_interval1", "interval day to second", Map.of("min", "0.000", "max", "0.009", "step", "-0.004"), "count(distinct neg_interval1)", "4"))
+                .add(new TestDataType("neg_interval2", "interval year to month", Map.of("min", "0", "max", "9", "step", "-4"), "count(distinct neg_interval2)", "4"))
+                .add(new TestDataType("neg_timestamp", "timestamp", Map.of("min", "2022-03-21 00:00:00.000", "max", "2022-03-21 00:00:00.009", "step", "-4ms"), "count(distinct neg_timestamp)", "4"))
+                .add(new TestDataType("neg_timestamp0", "timestamp(0)", Map.of("min", "2022-03-21 00:00:00", "max", "2022-03-21 00:00:09", "step", "-4s"), "count(distinct neg_timestamp0)", "4"))
+                .add(new TestDataType("neg_timestamp6", "timestamp(6)", Map.of("min", "2022-03-21 00:00:00.000000", "max", "2022-03-21 00:00:00.000009", "step", "-4us"), "count(distinct neg_timestamp6)", "4"))
+                .add(new TestDataType("neg_timestamp9", "timestamp(9)", Map.of("min", "2022-03-21 00:00:00.000000000", "max", "2022-03-21 00:00:00.000009000", "step", "-4us"), "count(distinct neg_timestamp9)", "4"))
+                .add(new TestDataType("neg_timestamptz", "timestamp with time zone", Map.of("min", "2022-03-21 00:00:00.000 +01:00", "max", "2022-03-21 00:00:00.009 +01:00", "step", "-4ms"), "count(distinct neg_timestamptz)", "4"))
+                .add(new TestDataType("neg_timestamptz0", "timestamp(0) with time zone", Map.of("min", "2022-03-21 00:00:00 +01:00", "max", "2022-03-21 00:00:09 +01:00", "step", "-4s"), "count(distinct neg_timestamptz0)", "4"))
+                .add(new TestDataType("neg_timestamptz6", "timestamp(6) with time zone", Map.of("min", "2022-03-21 00:00:00.000000 +01:00", "max", "2022-03-21 00:00:00.009000 +01:00", "step", "-4ms"), "count(distinct neg_timestamptz6)", "4"))
+                .add(new TestDataType("neg_timestamptz9", "timestamp(9) with time zone", Map.of("min", "2022-03-21 00:00:00.000000000 +01:00", "max", "2022-03-21 00:00:00.009000000 +01:00", "step", "-4ms"), "count(distinct neg_timestamptz9)", "4"))
+                .add(new TestDataType("neg_time", "time", Map.of("min", "01:02:03.456", "max", "01:02:03.465", "step", "-4ms"), "count(distinct neg_time)", "4"))
+                .add(new TestDataType("neg_time0", "time(0)", Map.of("min", "01:02:03", "max", "01:02:12", "step", "-4s"), "count(distinct neg_time0)", "4"))
+                .add(new TestDataType("neg_time6", "time(6)", Map.of("min", "01:02:03.000456", "max", "01:02:03.000465", "step", "-4us"), "count(distinct neg_time6)", "4"))
+                .add(new TestDataType("neg_time9", "time(9)", Map.of("min", "01:02:03.000000456", "max", "01:02:03.000000465", "step", "-4ns"), "count(distinct neg_time9)", "4"))
+                .add(new TestDataType("neg_timetz", "time with time zone", Map.of("min", "01:02:03.456 +01:00", "max", "01:02:03.465 +01:00", "step", "-4ms"), "count(distinct neg_timetz)", "4"))
+                .add(new TestDataType("neg_timetz0", "time(0) with time zone", Map.of("min", "01:02:03 +01:00", "max", "01:02:12 +01:00", "step", "-4s"), "count(distinct neg_timetz0)", "4"))
+                .add(new TestDataType("neg_timetz6", "time(6) with time zone", Map.of("min", "01:02:03.000456 +01:00", "max", "01:02:03.000465 +01:00", "step", "-4us"), "count(distinct neg_timetz6)", "4"))
+                .add(new TestDataType("neg_timetz9", "time(9) with time zone", Map.of("min", "01:02:03.000000456 +01:00", "max", "01:02:03.000000465 +01:00", "step", "-4ns"), "count(distinct neg_timetz9)", "4"))
+                .add(new TestDataType("neg_timetz12", "time(12) with time zone", Map.of("min", "01:02:03.000000000456 +01:00", "max", "01:02:03.000000009456 +01:00", "step", "-4ns"), "count(distinct neg_timetz12)", "4"))
+                .build();
+
+        for (TestDataType testCase : testCases) {
+            try (TestTable table = new TestTable(getQueryRunner()::execute, "step_small_" + testCase.name(), "(%s)".formatted(testCase.columnSchema()))) {
+                assertQuery("SELECT %s FROM %s".formatted(testCase.queryExpression(), table.getName()), "VALUES (%s)".formatted(testCase.expectedValue()));
+            }
+        }
+
+        // step smaller than the precision
+        testCases = ImmutableList.<TestDataType>builder()
+                .add(new TestDataType("seq_date", "date", Map.of("min", "2022-03-01", "max", "2022-03-13", "step", "10m"), "count(distinct seq_date)", "8"))
+                .build();
+
+        for (TestDataType testCase : testCases) {
+            try (TestTable table = new TestTable(getQueryRunner()::execute, "step_large_" + testCase.name(), "(%s)".formatted(testCase.columnSchema()))) {
                 assertQuery("SELECT %s FROM %s".formatted(testCase.queryExpression(), table.getName()), "VALUES (%s)".formatted(testCase.expectedValue()));
             }
         }

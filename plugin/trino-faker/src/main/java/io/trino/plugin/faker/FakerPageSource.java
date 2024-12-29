@@ -648,20 +648,24 @@ class FakerPageSource
 
         static LongRange of(Range range, long factor, long defaultMin, long defaultMax, long step)
         {
-            return new LongRange(
-                    roundDiv((long) range.getLowValue().orElse(defaultMin), factor) + (!range.isLowUnbounded() && !range.isLowInclusive() ? 1 : 0),
-                    roundDiv((long) range.getHighValue().orElse(defaultMax), factor) + (!range.isHighUnbounded() && range.isHighInclusive() ? 1 : 0),
-                    step);
+            if (step > 0) {
+                long low = roundDiv((long) range.getLowValue().orElse(defaultMin), factor) + (!range.isLowUnbounded() && !range.isLowInclusive() ? 1 : 0);
+                long high = roundDiv((long) range.getHighValue().orElse(defaultMax), factor) + (!range.isHighUnbounded() && range.isHighInclusive() ? 1 : 0);
+                return new LongRange(low, high, step);
+            }
+            long low = roundDiv((long) range.getHighValue().orElse(defaultMax), factor) + (!range.isHighUnbounded() && !range.isHighInclusive() ? 1 : 0);
+            long high = roundDiv((long) range.getLowValue().orElse(defaultMin), factor) + (!range.isLowUnbounded() && range.isLowInclusive() ? 1 : 0);
+            return new LongRange(low, high, step);
         }
 
         long at(long index)
         {
-            return Math.min(low + index * step, high - 1);
+            return step > 0 ? Math.min(low + index * step, high - 1) : Math.max(low + index * step, high - 1);
         }
 
         long at(long index, long factor)
         {
-            return Math.min(low + roundDiv(index * step, factor), high - 1);
+            return step > 0 ? Math.min(low + roundDiv(index * step, factor), high - 1) : Math.max(low + roundDiv(index * step, factor), high - 1);
         }
     }
 
@@ -684,20 +688,24 @@ class FakerPageSource
 
         static IntRange of(Range range, long defaultMin, long defaultMax, long step)
         {
-            return new IntRange(
-                    toIntExact((long) range.getLowValue().orElse(defaultMin)) + (!range.isLowUnbounded() && !range.isLowInclusive() ? 1 : 0),
-                    toIntExact((long) range.getHighValue().orElse(defaultMax)) + (!range.isHighUnbounded() && range.isHighInclusive() ? 1 : 0),
-                    step);
+            if (step > 0) {
+                int low = toIntExact((long) range.getLowValue().orElse(defaultMin)) + (!range.isLowUnbounded() && !range.isLowInclusive() ? 1 : 0);
+                int high = toIntExact((long) range.getHighValue().orElse(defaultMax)) + (!range.isHighUnbounded() && range.isHighInclusive() ? 1 : 0);
+                return new IntRange(low, high, step);
+            }
+            int low = toIntExact((long) range.getHighValue().orElse(defaultMax)) + (!range.isHighUnbounded() && !range.isHighInclusive() ? 1 : 0);
+            int high = toIntExact((long) range.getLowValue().orElse(defaultMin)) + (!range.isLowUnbounded() && range.isLowInclusive() ? 1 : 0);
+            return new IntRange(low, high, step);
         }
 
         long at(long index)
         {
-            return Math.min(low + index * step, high - 1);
+            return step > 0 ? Math.min(low + index * step, high - 1) : Math.max(low + index * step, high - 1);
         }
 
         long at(long index, long factor)
         {
-            return Math.min(low + roundDiv(index * step, factor), high - 1);
+            return step > 0 ? Math.min(low + roundDiv(index * step, factor), high - 1) : Math.max(low + roundDiv(index * step, factor), high - 1);
         }
     }
 
@@ -710,12 +718,23 @@ class FakerPageSource
 
         static FloatRange of(Range range, float step)
         {
-            float low = range.getLowValue().map(v -> intBitsToFloat(toIntExact((long) v))).orElse(Float.MIN_VALUE);
-            if (!range.isLowUnbounded() && !range.isLowInclusive()) {
+            if (step > 0) {
+                float low = range.getLowValue().map(v -> intBitsToFloat(toIntExact((long) v))).orElse(Float.MIN_VALUE);
+                if (!range.isLowUnbounded() && !range.isLowInclusive()) {
+                    low = Math.nextUp(low);
+                }
+                float high = range.getHighValue().map(v -> intBitsToFloat(toIntExact((long) v))).orElse(Float.MAX_VALUE);
+                if (!range.isHighUnbounded() && range.isHighInclusive()) {
+                    high = Math.nextUp(high);
+                }
+                return new FloatRange(low, high, step);
+            }
+            float low = range.getHighValue().map(v -> intBitsToFloat(toIntExact((long) v))).orElse(Float.MAX_VALUE);
+            if (!range.isHighUnbounded() && !range.isHighInclusive()) {
                 low = Math.nextUp(low);
             }
-            float high = range.getHighValue().map(v -> intBitsToFloat(toIntExact((long) v))).orElse(Float.MAX_VALUE);
-            if (!range.isHighUnbounded() && range.isHighInclusive()) {
+            float high = range.getLowValue().map(v -> intBitsToFloat(toIntExact((long) v))).orElse(Float.MIN_VALUE);
+            if (!range.isLowUnbounded() && range.isLowInclusive()) {
                 high = Math.nextUp(high);
             }
             return new FloatRange(low, high, step);
@@ -723,7 +742,7 @@ class FakerPageSource
 
         float at(long index)
         {
-            return Math.min(low + index * step, Math.nextDown(high));
+            return step > 0 ? Math.min(low + index * step, Math.nextDown(high)) : Math.max(low + index * step, Math.nextDown(high));
         }
     }
 
@@ -736,12 +755,23 @@ class FakerPageSource
 
         static DoubleRange of(Range range, double step)
         {
-            double low = (double) range.getLowValue().orElse(Double.MIN_VALUE);
-            if (!range.isLowUnbounded() && !range.isLowInclusive()) {
+            if (step > 0) {
+                double low = (double) range.getLowValue().orElse(Double.MIN_VALUE);
+                if (!range.isLowUnbounded() && !range.isLowInclusive()) {
+                    low = Math.nextUp(low);
+                }
+                double high = (double) range.getHighValue().orElse(Double.MAX_VALUE);
+                if (!range.isHighUnbounded() && range.isHighInclusive()) {
+                    high = Math.nextUp(high);
+                }
+                return new DoubleRange(low, high, step);
+            }
+            double low = (double) range.getHighValue().orElse(Double.MAX_VALUE);
+            if (!range.isHighUnbounded() && !range.isHighInclusive()) {
                 low = Math.nextUp(low);
             }
-            double high = (double) range.getHighValue().orElse(Double.MAX_VALUE);
-            if (!range.isHighUnbounded() && range.isHighInclusive()) {
+            double high = (double) range.getLowValue().orElse(Double.MIN_VALUE);
+            if (!range.isLowUnbounded() && range.isLowInclusive()) {
                 high = Math.nextUp(high);
             }
             return new DoubleRange(low, high, step);
@@ -749,7 +779,7 @@ class FakerPageSource
 
         double at(long index)
         {
-            return Math.min(low + index * step, Math.nextDown(high));
+            return step > 0 ? Math.min(low + index * step, Math.nextDown(high)) : Math.max(low + index * step, Math.nextDown(high));
         }
     }
 
@@ -764,14 +794,19 @@ class FakerPageSource
         {
             long defaultMin = -999999999999999999L / POWERS_OF_TEN[18 - precision];
             long defaultMax = 999999999999999999L / POWERS_OF_TEN[18 - precision];
-            long low = (long) range.getLowValue().orElse(defaultMin) + (!range.isLowUnbounded() && !range.isLowInclusive() ? 1 : 0);
-            long high = (long) range.getHighValue().orElse(defaultMax) + (!range.isHighUnbounded() && range.isHighInclusive() ? 1 : 0);
+            if (step > 0) {
+                long low = (long) range.getLowValue().orElse(defaultMin) + (!range.isLowUnbounded() && !range.isLowInclusive() ? 1 : 0);
+                long high = (long) range.getHighValue().orElse(defaultMax) + (!range.isHighUnbounded() && range.isHighInclusive() ? 1 : 0);
+                return new ShortDecimalRange(low, high, step);
+            }
+            long low = (long) range.getHighValue().orElse(defaultMax) + (!range.isHighUnbounded() && !range.isHighInclusive() ? 1 : 0);
+            long high = (long) range.getLowValue().orElse(defaultMin) + (!range.isLowUnbounded() && range.isLowInclusive() ? 1 : 0);
             return new ShortDecimalRange(low, high, step);
         }
 
         long at(long index)
         {
-            return Math.min(low + index * step, high - 1);
+            return step > 0 ? Math.min(low + index * step, high - 1) : Math.max(low + index * step, high - 1);
         }
     }
 
@@ -784,12 +819,23 @@ class FakerPageSource
 
         static Int128Range of(Range range, Int128 step)
         {
-            Int128 low = (Int128) range.getLowValue().orElse(Decimals.MIN_UNSCALED_DECIMAL);
-            Int128 high = (Int128) range.getHighValue().orElse(Decimals.MAX_UNSCALED_DECIMAL);
-            if (!range.isLowUnbounded() && !range.isLowInclusive()) {
+            if (!step.isNegative()) {
+                Int128 low = (Int128) range.getLowValue().orElse(Decimals.MIN_UNSCALED_DECIMAL);
+                Int128 high = (Int128) range.getHighValue().orElse(Decimals.MAX_UNSCALED_DECIMAL);
+                if (!range.isLowUnbounded() && !range.isLowInclusive()) {
+                    low = Int128Math.add(low, Int128.ONE);
+                }
+                if (!range.isHighUnbounded() && range.isHighInclusive()) {
+                    high = Int128Math.add(high, Int128.ONE);
+                }
+                return new Int128Range(low, high, step);
+            }
+            Int128 low = (Int128) range.getHighValue().orElse(Decimals.MAX_UNSCALED_DECIMAL);
+            Int128 high = (Int128) range.getLowValue().orElse(Decimals.MIN_UNSCALED_DECIMAL);
+            if (!range.isHighUnbounded() && !range.isHighInclusive()) {
                 low = Int128Math.add(low, Int128.ONE);
             }
-            if (!range.isHighUnbounded() && range.isHighInclusive()) {
+            if (!range.isLowUnbounded() && range.isLowInclusive()) {
                 high = Int128Math.add(high, Int128.ONE);
             }
             return new Int128Range(low, high, step);
@@ -799,6 +845,9 @@ class FakerPageSource
         {
             Int128 nextValue = Int128Math.add(low, Int128Math.multiply(Int128.valueOf(index), step));
             Int128 highInclusive = Int128Math.subtract(high, Int128.ONE);
+            if (step.isNegative()) {
+                return highInclusive.compareTo(nextValue) >= 0 ? highInclusive : nextValue;
+            }
             return highInclusive.compareTo(nextValue) < 0 ? highInclusive : nextValue;
         }
     }
@@ -814,22 +863,40 @@ class FakerPageSource
         {
             LongTimestamp low = (LongTimestamp) range.getLowValue().orElse(new LongTimestamp(Long.MIN_VALUE, 0));
             LongTimestamp high = (LongTimestamp) range.getHighValue().orElse(new LongTimestamp(Long.MAX_VALUE, PICOSECONDS_PER_MICROSECOND - 1));
-            int factor;
-            if (precision <= 6) {
-                factor = (int) POWERS_OF_TEN[6 - precision];
-                low = new LongTimestamp(roundDiv(low.getEpochMicros(), factor) + (!range.isLowUnbounded() && !range.isLowInclusive() ? 1 : 0), 0);
-                high = new LongTimestamp(roundDiv(high.getEpochMicros(), factor) + (!range.isHighUnbounded() && range.isHighInclusive() ? 1 : 0), 0);
+            if (step > 0) {
+                if (precision <= 6) {
+                    int factor = (int) POWERS_OF_TEN[6 - precision];
+                    low = new LongTimestamp(roundDiv(low.getEpochMicros(), factor) + (!range.isLowUnbounded() && !range.isLowInclusive() ? 1 : 0), 0);
+                    high = new LongTimestamp(roundDiv(high.getEpochMicros(), factor) + (!range.isHighUnbounded() && range.isHighInclusive() ? 1 : 0), 0);
+                    return new LongTimestampRange(low, high, factor, step);
+                }
+                int factor = (int) POWERS_OF_TEN[12 - precision];
+                int lowPicosOfMicro = roundDiv(low.getPicosOfMicro(), factor) + (!range.isLowUnbounded() && !range.isLowInclusive() ? 1 : 0);
+                low = new LongTimestamp(
+                        low.getEpochMicros() - (lowPicosOfMicro < 0 ? 1 : 0),
+                        (lowPicosOfMicro + factor) % factor);
+                int highPicosOfMicro = roundDiv(high.getPicosOfMicro(), factor) + (!range.isHighUnbounded() && range.isHighInclusive() ? 1 : 0);
+                high = new LongTimestamp(
+                        high.getEpochMicros() + (highPicosOfMicro > factor ? 1 : 0),
+                        highPicosOfMicro % factor);
                 return new LongTimestampRange(low, high, factor, step);
             }
-            factor = (int) POWERS_OF_TEN[12 - precision];
-            int lowPicosOfMicro = roundDiv(low.getPicosOfMicro(), factor) + (!range.isLowUnbounded() && !range.isLowInclusive() ? 1 : 0);
+            if (precision <= 6) {
+                int factor = (int) POWERS_OF_TEN[6 - precision];
+                low = new LongTimestamp(roundDiv(high.getEpochMicros(), factor) + (!range.isHighUnbounded() && !range.isHighInclusive() ? 1 : 0), 0);
+                high = new LongTimestamp(roundDiv(low.getEpochMicros(), factor) + (!range.isLowUnbounded() && range.isLowInclusive() ? 1 : 0), 0);
+                return new LongTimestampRange(low, high, factor, step);
+            }
+            int factor = (int) POWERS_OF_TEN[12 - precision];
+            LongTimestamp oldLow = low;
+            int lowPicosOfMicro = roundDiv(high.getPicosOfMicro(), factor) + (!range.isHighUnbounded() && !range.isHighInclusive() ? 1 : 0);
             low = new LongTimestamp(
-                    low.getEpochMicros() - (lowPicosOfMicro < 0 ? 1 : 0),
-                    (lowPicosOfMicro + factor) % factor);
-            int highPicosOfMicro = roundDiv(high.getPicosOfMicro(), factor) + (!range.isHighUnbounded() && range.isHighInclusive() ? 1 : 0);
+                    high.getEpochMicros() + (lowPicosOfMicro > factor ? 1 : 0),
+                    lowPicosOfMicro % factor);
+            int highPicosOfMicro = roundDiv(oldLow.getPicosOfMicro(), factor) + (!range.isLowUnbounded() && range.isLowInclusive() ? 1 : 0);
             high = new LongTimestamp(
-                    high.getEpochMicros() + (highPicosOfMicro > factor ? 1 : 0),
-                    highPicosOfMicro % factor);
+                    oldLow.getEpochMicros() - (highPicosOfMicro < 0 ? 1 : 0),
+                    (highPicosOfMicro + factor) % factor);
             return new LongTimestampRange(low, high, factor, step);
         }
 
@@ -857,8 +924,13 @@ class FakerPageSource
                             .map(v -> unpackZoneKey((long) v))
                             .orElse(TimeZoneKey.UTC_KEY));
             long factor = POWERS_OF_TEN[3 - precision];
-            long low = roundDiv(unpackMillisUtc((long) range.getLowValue().orElse(Long.MIN_VALUE)), factor) + (!range.isLowUnbounded() && !range.isLowInclusive() ? 1 : 0);
-            long high = roundDiv(unpackMillisUtc((long) range.getHighValue().orElse(Long.MAX_VALUE)), factor) + (!range.isHighUnbounded() && range.isHighInclusive() ? 1 : 0);
+            if (step > 0) {
+                long low = roundDiv(unpackMillisUtc((long) range.getLowValue().orElse(Long.MIN_VALUE)), factor) + (!range.isLowUnbounded() && !range.isLowInclusive() ? 1 : 0);
+                long high = roundDiv(unpackMillisUtc((long) range.getHighValue().orElse(Long.MAX_VALUE)), factor) + (!range.isHighUnbounded() && range.isHighInclusive() ? 1 : 0);
+                return new ShortTimestampWithTimeZoneRange(low, high, factor, defaultTZ, step);
+            }
+            long low = roundDiv(unpackMillisUtc((long) range.getHighValue().orElse(Long.MAX_VALUE)), factor) + (!range.isHighUnbounded() && !range.isHighInclusive() ? 1 : 0);
+            long high = roundDiv(unpackMillisUtc((long) range.getLowValue().orElse(Long.MIN_VALUE)), factor) + (!range.isLowUnbounded() && range.isLowInclusive() ? 1 : 0);
             return new ShortTimestampWithTimeZoneRange(low, high, factor, defaultTZ, step);
         }
 
@@ -890,16 +962,30 @@ class FakerPageSource
                 throw new TrinoException(INVALID_ROW_FILTER, "Range boundaries for timestamp with time zone columns must have the same time zone");
             }
             int factor = (int) POWERS_OF_TEN[12 - precision];
-            int lowPicosOfMilli = roundDiv(low.getPicosOfMilli(), factor) + (!range.isLowUnbounded() && !range.isLowInclusive() ? 1 : 0);
+            if (step > 0) {
+                int lowPicosOfMilli = roundDiv(low.getPicosOfMilli(), factor) + (!range.isLowUnbounded() && !range.isLowInclusive() ? 1 : 0);
+                low = fromEpochMillisAndFraction(
+                        low.getEpochMillis() - (lowPicosOfMilli < 0 ? 1 : 0),
+                        (lowPicosOfMilli + factor) % factor,
+                        defaultTZ);
+                int highPicosOfMilli = roundDiv(high.getPicosOfMilli(), factor) + (!range.isHighUnbounded() && range.isHighInclusive() ? 1 : 0);
+                high = fromEpochMillisAndFraction(
+                        high.getEpochMillis() + (highPicosOfMilli > factor ? 1 : 0),
+                        highPicosOfMilli % factor,
+                        defaultTZ);
+                return new LongTimestampWithTimeZoneRange(low, high, factor, defaultTZ, step);
+            }
+            LongTimestampWithTimeZone oldLow = low;
+            int lowPicosOfMilli = roundDiv(high.getPicosOfMilli(), factor) + (!range.isHighUnbounded() && !range.isHighInclusive() ? 1 : 0);
             low = fromEpochMillisAndFraction(
-                    low.getEpochMillis() - (lowPicosOfMilli < 0 ? 1 : 0),
-                    (lowPicosOfMilli + factor) % factor,
-                    low.getTimeZoneKey());
-            int highPicosOfMilli = roundDiv(high.getPicosOfMilli(), factor) + (!range.isHighUnbounded() && range.isHighInclusive() ? 1 : 0);
+                    high.getEpochMillis() + (lowPicosOfMilli > factor ? 1 : 0),
+                    lowPicosOfMilli % factor,
+                    defaultTZ);
+            int highPicosOfMilli = roundDiv(oldLow.getPicosOfMilli(), factor) + (!range.isLowUnbounded() && range.isLowInclusive() ? 1 : 0);
             high = fromEpochMillisAndFraction(
-                    high.getEpochMillis() + (highPicosOfMilli > factor ? 1 : 0),
-                    highPicosOfMilli % factor,
-                    high.getTimeZoneKey());
+                    oldLow.getEpochMillis() - (highPicosOfMilli < 0 ? 1 : 0),
+                    (highPicosOfMilli + factor) % factor,
+                    defaultTZ);
             return new LongTimestampWithTimeZoneRange(low, high, factor, defaultTZ, step);
         }
 
@@ -927,8 +1013,13 @@ class FakerPageSource
                             .map(v -> unpackOffsetMinutes((long) v))
                             .orElse(0));
             long factor = POWERS_OF_TEN[9 - precision];
-            long low = roundDiv(range.getLowValue().map(v -> unpackTimeNanos((long) v)).orElse(0L), factor) + (!range.isLowUnbounded() && !range.isLowInclusive() ? 1 : 0);
-            long high = roundDiv(range.getHighValue().map(v -> unpackTimeNanos((long) v)).orElse(NANOSECONDS_PER_DAY), factor) + (!range.isHighUnbounded() && range.isHighInclusive() ? 1 : 0);
+            if (step > 0) {
+                long low = roundDiv(range.getLowValue().map(v -> unpackTimeNanos((long) v)).orElse(0L), factor) + (!range.isLowUnbounded() && !range.isLowInclusive() ? 1 : 0);
+                long high = roundDiv(range.getHighValue().map(v -> unpackTimeNanos((long) v)).orElse(NANOSECONDS_PER_DAY), factor) + (!range.isHighUnbounded() && range.isHighInclusive() ? 1 : 0);
+                return new ShortTimeWithTimeZoneRange(low, high, factor, offsetMinutes, step);
+            }
+            long low = roundDiv(range.getHighValue().map(v -> unpackTimeNanos((long) v)).orElse(NANOSECONDS_PER_DAY), factor) + (!range.isHighUnbounded() && !range.isHighInclusive() ? 1 : 0);
+            long high = roundDiv(range.getLowValue().map(v -> unpackTimeNanos((long) v)).orElse(0L), factor) + (!range.isLowUnbounded() && range.isLowInclusive() ? 1 : 0);
             return new ShortTimeWithTimeZoneRange(low, high, factor, offsetMinutes, step);
         }
 
@@ -959,8 +1050,13 @@ class FakerPageSource
                 throw new TrinoException(INVALID_ROW_FILTER, "Range boundaries for time with time zone columns must have the same time zone");
             }
             int factor = (int) POWERS_OF_TEN[12 - precision];
-            long longLow = roundDiv(low.getPicoseconds(), factor) + (!range.isLowUnbounded() && !range.isLowInclusive() ? 1 : 0);
-            long longHigh = roundDiv(high.getPicoseconds(), factor) + (!range.isHighUnbounded() && range.isHighInclusive() ? 1 : 0);
+            if (step > 0) {
+                long longLow = roundDiv(low.getPicoseconds(), factor) + (!range.isLowUnbounded() && !range.isLowInclusive() ? 1 : 0);
+                long longHigh = roundDiv(high.getPicoseconds(), factor) + (!range.isHighUnbounded() && range.isHighInclusive() ? 1 : 0);
+                return new LongTimeWithTimeZoneRange(longLow, longHigh, factor, offsetMinutes, step);
+            }
+            long longLow = roundDiv(high.getPicoseconds(), factor) + (!range.isHighUnbounded() && !range.isHighInclusive() ? 1 : 0);
+            long longHigh = roundDiv(low.getPicoseconds(), factor) + (!range.isLowUnbounded() && range.isLowInclusive() ? 1 : 0);
             return new LongTimeWithTimeZoneRange(longLow, longHigh, factor, offsetMinutes, step);
         }
 
