@@ -455,7 +455,11 @@ public class FakerMetadata
         List<ColumnInfo> columns = info.columns();
         Map<String, Type> types = columns.stream().collect(toImmutableMap(ColumnInfo::name, ColumnInfo::type));
         Long rowCount = null;
-        for (ComputedStatistics statistic : computedStatistics) {
+        Optional<ComputedStatistics> optionalStatistic = computedStatistics.stream().reduce((_, _) -> {
+            throw new IllegalStateException("Found more than one computed statistic");
+        });
+        if (optionalStatistic.isPresent()) {
+            ComputedStatistics statistic = optionalStatistic.get();
             if (!statistic.getTableStatistics().get(ROW_COUNT).isNull(0)) {
                 rowCount = BIGINT.getLong(statistic.getTableStatistics().get(ROW_COUNT), 0);
             }
