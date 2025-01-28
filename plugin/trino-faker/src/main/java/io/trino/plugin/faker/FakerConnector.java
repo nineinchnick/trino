@@ -44,6 +44,7 @@ import static io.trino.spi.StandardErrorCode.INVALID_COLUMN_PROPERTY;
 import static io.trino.spi.StandardErrorCode.INVALID_SCHEMA_PROPERTY;
 import static io.trino.spi.StandardErrorCode.INVALID_TABLE_PROPERTY;
 import static io.trino.spi.connector.ConnectorCapabilities.NOT_NULL_COLUMN_CONSTRAINT;
+import static io.trino.spi.session.PropertyMetadata.booleanProperty;
 import static io.trino.spi.session.PropertyMetadata.doubleProperty;
 import static io.trino.spi.session.PropertyMetadata.longProperty;
 import static io.trino.spi.session.PropertyMetadata.stringProperty;
@@ -126,16 +127,12 @@ public class FakerConnector
                         null,
                         defaultLimit -> checkProperty(1 <= defaultLimit, INVALID_SCHEMA_PROPERTY, "default_limit value must be equal or greater than 1"),
                         false),
-                doubleProperty(
-                        SchemaInfo.SEQUENCE_MIN_DISTINCT_VALUES_RATIO,
+                booleanProperty(
+                        SchemaInfo.SEQUENCE_DETECTION_ENABLED,
                         """
-                                Minimum ratio of distinct values of a column to total number of rows in a table to treat the columns as a sequence
-                                when creating a table in this schema using existing data. Set to a value greater than 1 to disable using sequences""",
+                        If true, when creating a table using existing data, columns with the number of distinct values close to
+                        the number of rows will be treated as sequences""",
                         null,
-                        sequenceMinDistinctValuesRatio -> checkProperty(
-                                0 <= sequenceMinDistinctValuesRatio && sequenceMinDistinctValuesRatio <= 2,
-                                INVALID_SCHEMA_PROPERTY,
-                                SchemaInfo.SEQUENCE_MIN_DISTINCT_VALUES_RATIO + " value must be between 0 and 2, inclusive"),
                         false),
                 longProperty(
                         SchemaInfo.MAX_DICTIONARY_SIZE,
@@ -163,16 +160,12 @@ public class FakerConnector
                         null,
                         defaultLimit -> checkProperty(1 <= defaultLimit, INVALID_TABLE_PROPERTY, "default_limit value must be equal or greater than 1"),
                         false),
-                doubleProperty(
-                        TableInfo.SEQUENCE_MIN_DISTINCT_VALUES_RATIO,
+                booleanProperty(
+                        TableInfo.SEQUENCE_DETECTION_ENABLED,
                         """
-                                Minimum ratio of distinct values of a column to total number of rows in a table to treat the columns as a sequence
-                                when creating a table using existing data. Set to a value greater than 1 to disable using sequences""",
+                        If true, when creating a table using existing data, columns with the number of distinct values close to
+                        the number of rows will be treated as sequences""",
                         null,
-                        sequenceMinDistinctValuesRatio -> checkProperty(
-                                0 <= sequenceMinDistinctValuesRatio && sequenceMinDistinctValuesRatio <= 2,
-                                INVALID_TABLE_PROPERTY,
-                                TableInfo.SEQUENCE_MIN_DISTINCT_VALUES_RATIO + " value must be between 0 and 2, inclusive"),
                         false),
                 longProperty(
                         TableInfo.MAX_DICTIONARY_SIZE,

@@ -112,12 +112,13 @@ public class FakerMetadata
 {
     public static final String SCHEMA_NAME = "default";
     public static final String ROW_ID_COLUMN_NAME = "$row_id";
+    public static final double MIN_SEQUENCE_RATIO = 0.98;
 
     @GuardedBy("this")
     private final List<SchemaInfo> schemas = new ArrayList<>();
     private final double nullProbability;
     private final long defaultLimit;
-    private final double sequenceMinDistinctValuesRatio;
+    private final boolean isSequenceDetectionEnabled;
     private final long maxDictionarySize;
     private final FakerFunctionProvider functionsProvider;
 
@@ -135,7 +136,7 @@ public class FakerMetadata
         this.schemas.add(new SchemaInfo(SCHEMA_NAME, Map.of()));
         this.nullProbability = config.getNullProbability();
         this.defaultLimit = config.getDefaultLimit();
-        this.sequenceMinDistinctValuesRatio = config.getSequenceMinDistinctValuesRatio();
+        this.isSequenceDetectionEnabled = config.isSequenceDetectionEnabled();
         this.maxDictionarySize = config.getMaxDictionarySize();
         this.functionsProvider = requireNonNull(functionProvider, "functionProvider is null");
         this.random = new Random(1);
@@ -495,8 +496,8 @@ public class FakerMetadata
         long finalRowCount = firstNonNull(rowCount, 1L);
         Map<String, List<Object>> columnValues = getColumnValues(tableName, info, distinctValues, minimums, maximums);
         SchemaInfo schema = getSchema(tableName.getSchemaName());
-        double schemaMinSequenceRatio = (double) schema.properties().getOrDefault(SchemaInfo.SEQUENCE_MIN_DISTINCT_VALUES_RATIO, sequenceMinDistinctValuesRatio);
-        double tableMinSequenceRatio = (double) info.properties().getOrDefault(TableInfo.SEQUENCE_MIN_DISTINCT_VALUES_RATIO, schemaMinSequenceRatio);
+        boolean isSchemaSequenceDetectionEnabled = (boolean) schema.properties().getOrDefault(SchemaInfo.SEQUENCE_DETECTION_ENABLED, isSequenceDetectionEnabled);
+        boolean isTableSequenceDetectionEnabled = (boolean) info.properties().getOrDefault(TableInfo.SEQUENCE_DETECTION_ENABLED, isSchemaSequenceDetectionEnabled);
         return info.withColumns(columns.stream().map(column -> createColumnInfoFromStats(
                         column,
                         minimums.get(column.name()),
@@ -505,11 +506,11 @@ public class FakerMetadata
                         Optional.ofNullable(nonNullValues.get(column.name())).map(OptionalLong::of).orElse(OptionalLong.empty()),
                         finalRowCount,
                         columnValues.get(column.name()),
-                        tableMinSequenceRatio))
+                        isTableSequenceDetectionEnabled))
                 .collect(toImmutableList()));
     }
 
-    private static ColumnInfo createColumnInfoFromStats(ColumnInfo column, Object min, Object max, long distinctValues, OptionalLong nonNullValues, long rowCount, List<Object> allowedValues, double minSequenceRatio)
+    private static ColumnInfo createColumnInfoFromStats(ColumnInfo column, Object min, Object max, long distinctValues, OptionalLong nonNullValues, long rowCount, List<Object> allowedValues, boolean isSequenceDetectionEnabled)
     {
         if (isNotRangeType(column.type())) {
             return column;
@@ -535,7 +536,7 @@ public class FakerMetadata
         // Only include types that support generating sequences in FakerPageSource,
         // but don't include types with configurable precision, dates, or intervals.
         // The number of distinct values is an approximation, so compare it with a margin.
-        if (isSequenceType(column.type()) && (double) distinctValues / rowCount >= minSequenceRatio) {
+        if (isSequenceDetectionEnabled && isSequenceType(column.type()) && (double) distinctValues / rowCount >= MIN_SEQUENCE_RATIO) {
             handle = handle.withStep(ValueSet.of(column.type(), 1L));
             properties.put(STEP_PROPERTY, "1");
         }

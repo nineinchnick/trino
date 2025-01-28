@@ -26,7 +26,7 @@ public class FakerConfig
     private double nullProbability = 0.5;
     private long defaultLimit = 1000L;
     private Locale locale = Locale.ENGLISH;
-    private double sequenceMinDistinctValuesRatio = 0.98;
+    private boolean sequenceDetectionEnabled = true;
     private long maxDictionarySize = 1000L;
 
     @Max(1)
@@ -71,21 +71,19 @@ public class FakerConfig
         return this;
     }
 
-    @Max(2)
-    @Min(0)
-    public double getSequenceMinDistinctValuesRatio()
+    public boolean isSequenceDetectionEnabled()
     {
-        return sequenceMinDistinctValuesRatio;
+        return sequenceDetectionEnabled;
     }
 
-    @Config("faker.sequence-min-distinct-values-ratio")
+    @Config("faker.sequence-detection-enabled")
     @ConfigDescription(
             """
-            Minimum ratio of distinct values of a column to total number of rows in a table to treat the columns as a sequence
-            when creating a table using existing data. Set to a value greater than 1 to disable using sequences""")
-    public FakerConfig setSequenceMinDistinctValuesRatio(double value)
+            If true, when creating a table using existing data, columns with the number of distinct values close to
+            the number of rows will be treated as sequences""")
+    public FakerConfig setSequenceDetectionEnabled(boolean value)
     {
-        this.sequenceMinDistinctValuesRatio = value;
+        this.sequenceDetectionEnabled = value;
         return this;
     }
 
@@ -98,8 +96,8 @@ public class FakerConfig
     @Config("faker.max-dictionary-size")
     @ConfigDescription(
             """
-            Maximum size of randomly generated dictionaries to pick values from, used for columns with low number of approximate distinct values
-            observed during table creation using existing data. Set to zero to disable using dictionaries""")
+                    Maximum size of randomly generated dictionaries to pick values from, used for columns with low number of approximate distinct values
+                    observed during table creation using existing data. Set to zero to disable using dictionaries""")
     public FakerConfig setMaxDictionarySize(long value)
     {
         this.maxDictionarySize = value;
