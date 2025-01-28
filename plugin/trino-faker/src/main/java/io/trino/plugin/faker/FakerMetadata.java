@@ -66,7 +66,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.OptionalLong;
 import java.util.Random;
 import java.util.Set;
 import java.util.function.UnaryOperator;
@@ -503,14 +502,14 @@ public class FakerMetadata
                         minimums.get(column.name()),
                         maximums.get(column.name()),
                         requireNonNull(distinctValues.getOrDefault(column.name(), 0L)),
-                        Optional.ofNullable(nonNullValues.get(column.name())).map(OptionalLong::of).orElse(OptionalLong.empty()),
+                        Optional.ofNullable(nonNullValues.get(column.name())),
                         finalRowCount,
                         columnValues.get(column.name()),
                         isTableSequenceDetectionEnabled))
                 .collect(toImmutableList()));
     }
 
-    private static ColumnInfo createColumnInfoFromStats(ColumnInfo column, Object min, Object max, long distinctValues, OptionalLong nonNullValues, long rowCount, List<Object> allowedValues, boolean isSequenceDetectionEnabled)
+    private static ColumnInfo createColumnInfoFromStats(ColumnInfo column, Object min, Object max, long distinctValues, Optional<Long> nonNullValues, long rowCount, List<Object> allowedValues, boolean isSequenceDetectionEnabled)
     {
         if (isNotRangeType(column.type())) {
             return column;
@@ -529,7 +528,7 @@ public class FakerMetadata
             properties.put(MAX_PROPERTY, Literal.format(column.type(), max));
         }
         if (nonNullValues.isPresent()) {
-            double nullProbability = 1 - (double) nonNullValues.getAsLong() / rowCount;
+            double nullProbability = 1 - (double) nonNullValues.get() / rowCount;
             handle = handle.withNullProbability(nullProbability);
             properties.put(NULL_PROBABILITY_PROPERTY, nullProbability);
         }
