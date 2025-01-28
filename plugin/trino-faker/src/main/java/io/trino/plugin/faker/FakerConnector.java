@@ -134,13 +134,12 @@ public class FakerConnector
                         the number of rows will be treated as sequences""",
                         null,
                         false),
-                longProperty(
-                        SchemaInfo.MAX_DICTIONARY_SIZE,
+                booleanProperty(
+                        SchemaInfo.DICTIONARY_DETECTION_ENABLED,
                         """
-                        Maximum size of randomly generated dictionaries to pick values from, used for columns with low number of approximate distinct values
-                        observed during table created in this schema using existing data. Set to zero to disable using dictionaries""",
+                        If true, when creating a table using existing data, columns with a low number of distinct values
+                        will have the allowed_values column property populated with random values""",
                         null,
-                        maxDictionarySize -> checkProperty(0 <= maxDictionarySize, INVALID_SCHEMA_PROPERTY, "max_dictionary_size value must be equal or greater than 0"),
                         false));
     }
 
@@ -167,13 +166,12 @@ public class FakerConnector
                         the number of rows will be treated as sequences""",
                         null,
                         false),
-                longProperty(
-                        TableInfo.MAX_DICTIONARY_SIZE,
+                booleanProperty(
+                        TableInfo.DICTIONARY_DETECTION_ENABLED,
                         """
-                        Maximum size of randomly generated dictionaries to pick values from, used for columns with low number of approximate distinct values
-                        observed during table creation using existing data. Set to zero to disable using dictionaries""",
+                        If true, when creating a table using existing data, columns with a low number of distinct values
+                        will have the allowed_values column property populated with random values""",
                         null,
-                        maxDictionarySize -> checkProperty(0 <= maxDictionarySize, INVALID_TABLE_PROPERTY, "max_dictionary_size value must be equal or greater than 0"),
                         false));
     }
 

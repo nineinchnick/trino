@@ -112,13 +112,14 @@ public class FakerMetadata
     public static final String SCHEMA_NAME = "default";
     public static final String ROW_ID_COLUMN_NAME = "$row_id";
     public static final double MIN_SEQUENCE_RATIO = 0.98;
+    public static final long MAX_DICTIONARY_SIZE = 1000L;
 
     @GuardedBy("this")
     private final List<SchemaInfo> schemas = new ArrayList<>();
     private final double nullProbability;
     private final long defaultLimit;
     private final boolean isSequenceDetectionEnabled;
-    private final long maxDictionarySize;
+    private final boolean isDictionaryDetectionEnabled;
     private final FakerFunctionProvider functionsProvider;
 
     private final Random random;
@@ -136,7 +137,7 @@ public class FakerMetadata
         this.nullProbability = config.getNullProbability();
         this.defaultLimit = config.getDefaultLimit();
         this.isSequenceDetectionEnabled = config.isSequenceDetectionEnabled();
-        this.maxDictionarySize = config.getMaxDictionarySize();
+        this.isDictionaryDetectionEnabled = config.isDictionaryDetectionEnabled();
         this.functionsProvider = requireNonNull(functionProvider, "functionProvider is null");
         this.random = new Random(1);
         this.faker = new Faker(random);
@@ -546,49 +547,40 @@ public class FakerMetadata
 
     private Map<String, List<Object>> getColumnValues(SchemaTableName tableName, TableInfo info, Map<String, Long> distinctValues, Map<String, Object> minimums, Map<String, Object> maximums)
     {
-        long schemaDictionarySize = (long) getSchema(tableName.getSchemaName()).properties().getOrDefault(SchemaInfo.MAX_DICTIONARY_SIZE, maxDictionarySize);
-        long maxDictionarySize = (long) info.properties().getOrDefault(TableInfo.MAX_DICTIONARY_SIZE, schemaDictionarySize);
-        if (maxDictionarySize == 0 || distinctValues.isEmpty()) {
+        boolean schemaDictionaryDetectionEnabled = (boolean) getSchema(tableName.getSchemaName()).properties().getOrDefault(SchemaInfo.DICTIONARY_DETECTION_ENABLED, isDictionaryDetectionEnabled);
+        boolean tableDictionaryDetectionEnabled = (boolean) info.properties().getOrDefault(TableInfo.DICTIONARY_DETECTION_ENABLED, schemaDictionaryDetectionEnabled);
+        if (!tableDictionaryDetectionEnabled || distinctValues.isEmpty()) {
             return ImmutableMap.of();
         }
         List<ColumnInfo> columns = info.columns();
-        Map<String, Type> types = columns.stream().collect(toImmutableMap(ColumnInfo::name, ColumnInfo::type));
-        List<String> dictionaryColumns = distinctValues.entrySet().stream()
-                .filter(entry -> entry.getValue() <= maxDictionarySize)
-                .map(Map.Entry::getKey)
-                .collect(toImmutableList());
         Map<String, FakerColumnHandle> columnHandles = info.columns().stream()
                 .collect(toImmutableMap(ColumnInfo::name, column -> column.handle().withNullProbability(0)));
+        List<FakerColumnHandle> dictionaryColumns = distinctValues.entrySet().stream()
+                .filter(entry -> entry.getValue() <= MAX_DICTIONARY_SIZE)
+                .map(entry -> columnHandles.get(entry.getKey()))
+                .filter(Objects::nonNull)
+                .map(column -> !minimums.containsKey(column.name()) ? column : column.withDomain(Domain.create(ValueSet.ofRanges(Range.range(
+                        column.type(),
+                        minimums.get(column.name()),
+                        true,
+                        maximums.get(column.name()),
+                        true)), false)))
+                .collect(toImmutableList());
         ImmutableMap.Builder<String, List<Object>> columnValues = ImmutableMap.builder();
-        try (FakerPageSource pageSource = new FakerPageSource(
-                faker,
-                random,
-                dictionaryColumns.stream()
-                        .map(columnHandles::get)
-                        .filter(Objects::nonNull)
-                        .map(column -> !minimums.containsKey(column.name()) ? column : column.withDomain(Domain.create(ValueSet.ofRanges(Range.range(
-                                column.type(),
-                                minimums.get(column.name()),
-                                true,
-                                maximums.get(column.name()),
-                                true)), false)))
-                        .collect(toImmutableList()),
-                0,
-                maxDictionarySize * 2)) {
-            // TODO support reading values from multiple pages
+        try (FakerPageSource pageSource = new FakerPageSource(faker, random, dictionaryColumns, 0, MAX_DICTIONARY_SIZE * 2)) {
             Page page = null;
             while (page == null) {
                 page = pageSource.getNextPage();
             }
-            checkState(maxDictionarySize <= page.getPositionCount(), "Max dictionary size cannot be greater than %d".formatted(page.getPositionCount()));
+            Map<String, Type> types = columns.stream().collect(toImmutableMap(ColumnInfo::name, ColumnInfo::type));
             for (int channel = 0; channel < dictionaryColumns.size(); channel++) {
-                String column = dictionaryColumns.get(channel);
+                String column = dictionaryColumns.get(channel).name();
                 Block block = page.getBlock(channel);
                 Type type = types.get(column);
                 List<Object> values = IntStream.range(0, page.getPositionCount())
                         .mapToObj(position -> readNativeValue(type, block, position))
                         .distinct()
-                        .limit(maxDictionarySize)
+                        .limit(distinctValues.get(column))
                         .collect(toImmutableList());
                 columnValues.put(column, values);
             }

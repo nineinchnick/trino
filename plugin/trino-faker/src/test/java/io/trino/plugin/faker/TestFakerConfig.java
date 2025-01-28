@@ -32,7 +32,7 @@ final class TestFakerConfig
                 .setDefaultLimit(1000L)
                 .setLocale("en")
                 .setSequenceDetectionEnabled(true)
-                .setMaxDictionarySize(1000L));
+                .setDictionaryDetectionEnabled(true));
     }
 
     @Test
@@ -43,7 +43,7 @@ final class TestFakerConfig
                 .put("faker.default-limit", "10")
                 .put("faker.locale", "pl-PL")
                 .put("faker.sequence-detection-enabled", "false")
-                .put("faker.max-dictionary-size", "0")
+                .put("faker.dictionary-detection-enabled", "false")
                 .buildOrThrow();
 
         FakerConfig expected = new FakerConfig()
@@ -51,7 +51,7 @@ final class TestFakerConfig
                 .setDefaultLimit(10L)
                 .setLocale("pl-PL")
                 .setSequenceDetectionEnabled(false)
-                .setMaxDictionarySize(0L);
+                .setDictionaryDetectionEnabled(false);
 
         assertFullMapping(properties, expected);
     }

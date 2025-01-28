@@ -27,7 +27,7 @@ public class FakerConfig
     private long defaultLimit = 1000L;
     private Locale locale = Locale.ENGLISH;
     private boolean sequenceDetectionEnabled = true;
-    private long maxDictionarySize = 1000L;
+    private boolean dictionaryDetectionEnabled = true;
 
     @Max(1)
     @Min(0)
@@ -87,20 +87,19 @@ public class FakerConfig
         return this;
     }
 
-    @Min(0)
-    public long getMaxDictionarySize()
+    public boolean isDictionaryDetectionEnabled()
     {
-        return maxDictionarySize;
+        return dictionaryDetectionEnabled;
     }
 
-    @Config("faker.max-dictionary-size")
+    @Config("faker.dictionary-detection-enabled")
     @ConfigDescription(
             """
-                    Maximum size of randomly generated dictionaries to pick values from, used for columns with low number of approximate distinct values
-                    observed during table creation using existing data. Set to zero to disable using dictionaries""")
-    public FakerConfig setMaxDictionarySize(long value)
+            If true, when creating a table using existing data, columns with a low number of distinct values
+            will have the allowed_values column property populated with random values""")
+    public FakerConfig setDictionaryDetectionEnabled(boolean value)
     {
-        this.maxDictionarySize = value;
+        this.dictionaryDetectionEnabled = value;
         return this;
     }
 }
