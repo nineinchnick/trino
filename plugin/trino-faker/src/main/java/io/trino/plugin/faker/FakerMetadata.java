@@ -66,6 +66,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Random;
 import java.util.Set;
 import java.util.function.UnaryOperator;
@@ -501,14 +502,14 @@ public class FakerMetadata
                         minimums.get(column.name()),
                         maximums.get(column.name()),
                         requireNonNull(distinctValues.getOrDefault(column.name(), 0L)),
-                        requireNonNull(nonNullValues.getOrDefault(column.name(), -1L)),
+                        Optional.ofNullable(nonNullValues.get(column.name())).map(OptionalLong::of).orElse(OptionalLong.empty()),
                         finalRowCount,
                         columnValues.get(column.name()),
                         tableMinSequenceRatio))
                 .collect(toImmutableList()));
     }
 
-    private static ColumnInfo createColumnInfoFromStats(ColumnInfo column, Object min, Object max, long distinctValues, long nonNullValues, long rowCount, List<Object> allowedValues, double minSequenceRatio)
+    private static ColumnInfo createColumnInfoFromStats(ColumnInfo column, Object min, Object max, long distinctValues, OptionalLong nonNullValues, long rowCount, List<Object> allowedValues, double minSequenceRatio)
     {
         if (isNotRangeType(column.type())) {
             return column;
@@ -526,8 +527,8 @@ public class FakerMetadata
             properties.put(MIN_PROPERTY, Literal.format(column.type(), min));
             properties.put(MAX_PROPERTY, Literal.format(column.type(), max));
         }
-        if (nonNullValues >= 0) {
-            double nullProbability = 1 - (double) nonNullValues / rowCount;
+        if (nonNullValues.isPresent()) {
+            double nullProbability = 1 - (double) nonNullValues.getAsLong() / rowCount;
             handle = handle.withNullProbability(nullProbability);
             properties.put(NULL_PROBABILITY_PROPERTY, nullProbability);
         }
